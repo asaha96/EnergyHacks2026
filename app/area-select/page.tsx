@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import L from 'leaflet';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Leaf, Crosshair } from 'lucide-react';
+import { ArrowLeft, Leaf, Crosshair, Ruler, MapPin, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { DynamicMap, type TileLayerType, type PolygonCoordinates } from '@/components/map';
+import { ConstraintsSidebar } from '@/components/constraints';
 import { Button } from '@/components/ui/button';
+import { calculateAreaWithUnits, formatArea, calculateCentroid } from '@/lib/geo';
 
 const MapControls = dynamic(
   () => import('@/components/map/map-internals').then((mod) => mod.MapControls),
@@ -36,6 +38,40 @@ export default function AreaSelectPage() {
   const [tileLayer, setTileLayer] = useState<TileLayerType>('positron');
   const [isProspecting, setIsProspecting] = useState(false);
   const [prospectedArea, setProspectedArea] = useState<PolygonCoordinates[] | null>(null);
+  const [locationName, setLocationName] = useState<string | null>(null);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [isConstraintsSidebarOpen, setIsConstraintsSidebarOpen] = useState(false);
+  const [mapWidth, setMapWidth] = useState('100%');
+
+  useEffect(() => {
+    if (!prospectedArea || prospectedArea.length < 3) {
+      setLocationName(null);
+      return;
+    }
+
+    const centroid = calculateCentroid(prospectedArea);
+    setIsLoadingLocation(true);
+
+    fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${centroid.lat}&lon=${centroid.lng}&format=json&zoom=14`
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.display_name) {
+          const parts = data.display_name.split(', ');
+          const shortName = parts.slice(0, 3).join(', ');
+          setLocationName(shortName);
+        } else {
+          setLocationName(`${centroid.lat.toFixed(4)}, ${centroid.lng.toFixed(4)}`);
+        }
+      })
+      .catch(() => {
+        setLocationName(`${centroid.lat.toFixed(4)}, ${centroid.lng.toFixed(4)}`);
+      })
+      .finally(() => {
+        setIsLoadingLocation(false);
+      });
+  }, [prospectedArea]);
 
   const handleMapReady = useCallback((map: L.Map) => {
     mapRef.current = map;
@@ -60,13 +96,33 @@ export default function AreaSelectPage() {
     setIsProspecting(false);
   }, []);
 
+  const handleOpenConstraintsSidebar = useCallback(() => {
+    setIsConstraintsSidebarOpen(true);
+  }, []);
+
+  const handleCloseConstraintsSidebar = useCallback(() => {
+    setIsConstraintsSidebarOpen(false);
+  }, []);
+
+  const handleMapWidthChange = useCallback((width: string) => {
+    setMapWidth(width);
+    // Invalidate map size after transition to ensure proper rendering
+    setTimeout(() => {
+      mapRef.current?.invalidateSize();
+    }, 350);
+  }, []);
+
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background">
       <motion.div
         initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
+        animate={{ opacity: 1, width: mapWidth }}
+        transition={{ 
+          opacity: { duration: 0.5 },
+          width: { type: 'spring', damping: 30, stiffness: 300 }
+        }}
         className="absolute inset-0"
+        style={{ width: mapWidth }}
       >
         <DynamicMap
           tileLayer={tileLayer}
@@ -167,41 +223,70 @@ export default function AreaSelectPage() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {!isProspecting && prospectedArea && (
+        {!isProspecting && prospectedArea && !isConstraintsSidebarOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            transition={{ duration: 0.3 }}
-            className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[1000]"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="absolute bottom-6 right-6 z-[1000]"
           >
-            <div className="bg-background/95 backdrop-blur-sm rounded-2xl shadow-lg border border-border/50 px-6 py-4">
-              <div className="flex flex-col items-center gap-4">
+            <div className="bg-background/95 backdrop-blur-sm rounded-2xl shadow-lg border border-border/50 p-5 w-80">
+              <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-primary" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
                   <span className="text-sm font-medium text-foreground">
                     Area Selected
                   </span>
                 </div>
                 
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-foreground">
-                    {prospectedArea.length} vertices
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Ready for analysis
-                  </p>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <Ruler className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Total Area</p>
+                      <p className="text-xl font-bold text-foreground">
+                        {formatArea(calculateAreaWithUnits(prospectedArea).acres)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <MapPin className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">Location</p>
+                      {isLoadingLocation ? (
+                        <p className="text-sm text-muted-foreground animate-pulse">
+                          Finding location...
+                        </p>
+                      ) : (
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {locationName}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleStartProspecting}
+                <div className="flex flex-col gap-2 pt-2">
+                  <Button 
+                    onClick={handleOpenConstraintsSidebar}
+                    className="w-full gap-2"
                   >
-                    Redraw
+                    <Sparkles className="h-4 w-4" />
+                    Analyze This Area
                   </Button>
-                  <Button onClick={() => router.push('/home')}>
-                    Continue
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleStartProspecting}
+                    className="w-full text-muted-foreground"
+                  >
+                    Redraw Selection
                   </Button>
                 </div>
               </div>
@@ -209,6 +294,12 @@ export default function AreaSelectPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConstraintsSidebar
+        isOpen={isConstraintsSidebarOpen}
+        onClose={handleCloseConstraintsSidebar}
+        onMapWidthChange={handleMapWidthChange}
+      />
     </div>
   );
 }
