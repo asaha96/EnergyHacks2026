@@ -10,6 +10,8 @@ import { DynamicMap, type TileLayerType, type PolygonCoordinates, type Equipment
 import { TerrainOverlay, SolarOverlay, WindOverlay, ExclusionOverlay, OptimalOverlay, type OverlayType } from '@/components/map/overlays';
 import { ConstraintsSidebar, FinancialConstraints, EnergyConstraints, LandConstraints, TechnicalConstraints, TimelineConstraints } from '@/components/constraints';
 import { AgentSidebar, type AnalysisPhase, type AgentMessageData, type AgentMessageType } from '@/components/agent';
+import { AgentConsentModal } from '@/components/agent/agent-consent-modal';
+import { SecurityLog, type LogEntry } from '@/components/agent/security-log';
 import { Button } from '@/components/ui/button';
 import { calculateAreaWithUnits, formatArea, calculateCentroid } from '@/lib/geo';
 import { usePlanStore } from '@/stores/plan-store';
@@ -57,6 +59,13 @@ export default function AreaSelectPage() {
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [isConstraintsSidebarOpen, setIsConstraintsSidebarOpen] = useState(false);
   const [isAgentSidebarOpen, setIsAgentSidebarOpen] = useState(false);
+
+  // -- AGENT AUTH STATE --
+  const [hasAgentConsent, setHasAgentConsent] = useState(false);
+  const [isConsentModalOpen, setIsConsentModalOpen] = useState(false);
+  const [securityLogs, setSecurityLogs] = useState<LogEntry[]>([]);
+  // ----------------------
+
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentPhase, setCurrentPhase] = useState<AnalysisPhase>('data-collection');
   const [agentMessages, setAgentMessages] = useState<AgentMessageData[]>([]);
@@ -662,6 +671,47 @@ export default function AreaSelectPage() {
     setIsAnalyzing(false);
   }, [addAgentMessage, updateAgentMessage, budget, primaryGoal, technologies, showOverlay, hideOverlay, clearAllOverlays, clearEquipment, prospectedArea, generateEquipmentPlacements, generateZoneLabels]);
 
+  const addSecurityLog = useCallback((message: string, type: LogEntry['type'], scope?: string) => {
+    setSecurityLogs(prev => [...prev, {
+      id: Math.random().toString(36),
+      timestamp: new Date().toLocaleTimeString(),
+      message,
+      type,
+      scope
+    }]);
+  }, []);
+
+  const handleAuthorizeAgent = useCallback((scopes: string[]) => {
+    setIsConsentModalOpen(false);
+
+    // Simulate secure handshake log sequence
+    addSecurityLog('User granted permission', 'success');
+
+    setTimeout(() => {
+      addSecurityLog('Minting delegated access token...', 'info');
+    }, 400);
+
+    setTimeout(() => {
+      addSecurityLog('Connecting to UtilityAPI (Simulated)...', 'info', 'read:utility_usage');
+    }, 800);
+
+    setTimeout(() => {
+      addSecurityLog('Fetching 12-month interval data...', 'success');
+    }, 1500);
+
+    setTimeout(() => {
+      addSecurityLog('Token exchange successful', 'success', 'read:finance');
+      setHasAgentConsent(true);
+      // Start analysis with the "Secure Token"
+      runAnalysis();
+    }, 2200);
+  }, [addSecurityLog, runAnalysis]);
+
+  const handleDenyAgent = useCallback(() => {
+    setIsConsentModalOpen(false);
+    addSecurityLog('Authorization denied by user', 'error');
+  }, [addSecurityLog]);
+
   const summaryMessageRef = useRef<string | null>(null);
 
   const addSummaryMessage = useCallback(() => {
@@ -692,6 +742,14 @@ export default function AreaSelectPage() {
   const handleAnalyze = useCallback(() => {
     if (!validation.canProceed) return;
 
+    // PRIVACY-FIRST AI CHECK
+    // If we don't have consent, we block the analysis and ask for permission.
+    if (!hasAgentConsent) {
+      addSecurityLog('Agent blocked: Insufficient permissions', 'waring');
+      setIsConsentModalOpen(true);
+      return;
+    }
+
     // Close constraints, open agent sidebar
     setIsConstraintsSidebarOpen(false);
     setIsAgentSidebarOpen(true);
@@ -700,7 +758,7 @@ export default function AreaSelectPage() {
     setTimeout(() => {
       runAnalysis();
     }, 400);
-  }, [validation.canProceed, runAnalysis]);
+  }, [validation.canProceed, runAnalysis, hasAgentConsent, addSecurityLog]);
 
   const handleStopAnalysis = useCallback(() => {
     setIsAnalyzing(false);
@@ -1159,6 +1217,22 @@ export default function AreaSelectPage() {
         currentPhase={currentPhase}
         isAnalyzing={isAnalyzing}
       />
+      <AgentConsentModal
+        isOpen={isConsentModalOpen}
+        onAccept={handleAuthorizeAgent}
+        onDeny={handleDenyAgent}
+      />
+
+      {/* Security Log Visualizer for Hackathon Demo */}
+      {securityLogs.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-4 left-4 z-[60] w-[400px]"
+        >
+          <SecurityLog logs={securityLogs} />
+        </motion.div>
+      )}
     </div>
   );
 }
