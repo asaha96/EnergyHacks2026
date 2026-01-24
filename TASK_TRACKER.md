@@ -492,7 +492,7 @@ Use this document to track progress through the RALPH loop. Check off items as t
 
 ---
 
-### Task 4.4: Polygon Drawing
+### Task 4.4: Polygon Drawing (Prospecting Mode)
 **Status:** ✅ Complete
 
 **Subtasks:**
@@ -506,26 +506,37 @@ Use this document to track progress through the RALPH loop. Check off items as t
 - [x] Store polygon coordinates in state
 
 **Files Created:**
-- `components/map/polygon-draw.tsx` - Drawing tools with polygon/rectangle modes
+- `components/map/prospect-mode.tsx` - Modal prospecting mode with drawing tools
 - `components/map/map-internals.tsx` - SSR-safe re-exports for map components
 
+**UX Improvements (Refactored):**
+The original implementation had conflicts between map panning and drawing. 
+Refactored to a modal "Prospecting Mode" approach:
+
+- **Explore Mode (default)**: Full map interaction (pan, zoom, search)
+- **Prospect Mode (explicit toggle)**: Drawing enabled, map interaction locked
+  - Primary-colored border frame indicates active mode
+  - "Prospecting Mode" badge at top
+  - Map dragging disabled to prevent conflicts
+  - Clear Cancel/Confirm actions
+  - Keyboard shortcuts (Esc, Enter, Cmd+Z)
+
 **Features Implemented:**
-- Floating drawing toolbar on left side with mode indicators
-- Polygon drawing: click to add points, double-click/Enter to finish
-- Rectangle drawing: click and drag to draw
-- Polygon styled with primary color (oklch), 20% fill opacity
-- Edit mode with dashed border indicator
-- Delete/clear button with destructive styling
-- Real-time coordinate updates to parent component
-- Context-aware instruction tooltips
-- Keyboard support (Escape to cancel, Enter to finish)
-- Dynamic imports to avoid SSR issues
+- "Start Prospecting" button triggers modal mode
+- Polygon tool: click to add vertices, preview line follows cursor
+- Rectangle tool: click and drag
+- Undo last point (polygon only)
+- Clear all points
+- Vertex markers visible during drawing
+- Confirmation flow with "Redraw" option
+- Visual boundary frame when prospecting
 
 **Acceptance Criteria:**
 - [x] Can draw polygons by clicking
-- [x] Can edit vertices after drawing
+- [x] Can undo/clear points
 - [x] Can delete and start over
 - [x] Polygon styled consistently with app
+- [x] No conflict between map navigation and drawing
 
 ---
 

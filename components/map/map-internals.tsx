@@ -2,5 +2,5 @@
 
 export { MapControls } from './map-controls';
 export { AddressSearch } from './address-search';
-export { PolygonDraw } from './polygon-draw';
-export type { PolygonCoordinates } from './polygon-draw';
+export { ProspectMode } from './prospect-mode';
+export type { PolygonCoordinates } from './prospect-mode';
