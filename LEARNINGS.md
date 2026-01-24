@@ -889,7 +889,81 @@ useEffect(() => {
 
 1. 
 
+#### Map Overlay System
+*From Task 6.3 - Date: Jan 24, 2026*
+
+**Files Created:**
+- `components/map/overlays/analysis-overlays.tsx` - All overlay components
+- `components/map/overlays/index.ts` - Barrel exports
+
+**Overlay Types:**
+```tsx
+type OverlayType = 'terrain' | 'solar' | 'wind' | 'exclusion' | 'optimal';
+
+interface BaseOverlayProps {
+  polygon: PolygonCoordinates[];  // Array of {lat, lng} coordinates
+  visible: boolean;
+  onAnimationComplete?: () => void;
+}
+```
+
+**Overlay Colors:**
+- Terrain: greens → yellows → reds (elevation heat map)
+- Solar: `#fff7bc` → `#cc4c02` (yellow-orange gradient)
+- Wind: `#deebf7` → `#084594` (blue gradient)
+- Exclusion: `#e74c3c` (red with dashed border)
+- Optimal: `#27ae60` (green highlight)
+
+**Usage in area-select page:**
+```tsx
+import { TerrainOverlay, SolarOverlay, WindOverlay, ExclusionOverlay, OptimalOverlay, type OverlayType } from '@/components/map/overlays';
+
+// State
+const [visibleOverlays, setVisibleOverlays] = useState<Set<OverlayType>>(new Set());
+
+// Helpers
+const showOverlay = useCallback((overlay: OverlayType) => {
+  setVisibleOverlays(prev => new Set(prev).add(overlay));
+}, []);
+
+const hideOverlay = useCallback((overlay: OverlayType) => {
+  setVisibleOverlays(prev => {
+    const next = new Set(prev);
+    next.delete(overlay);
+    return next;
+  });
+}, []);
+
+const clearAllOverlays = useCallback(() => {
+  setVisibleOverlays(new Set());
+}, []);
+
+// In JSX inside DynamicMap children:
+{prospectedArea && (
+  <>
+    <TerrainOverlay polygon={prospectedArea} visible={visibleOverlays.has('terrain')} />
+    <SolarOverlay polygon={prospectedArea} visible={visibleOverlays.has('solar')} />
+    <WindOverlay polygon={prospectedArea} visible={visibleOverlays.has('wind')} />
+    <ExclusionOverlay polygon={prospectedArea} visible={visibleOverlays.has('exclusion')} />
+    <OptimalOverlay polygon={prospectedArea} visible={visibleOverlays.has('optimal')} />
+  </>
+)}
+```
+
+**Phase-to-Overlay Mapping:**
+- Data Collection → `terrain`
+- Constraint Integration → `exclusion`
+- Technology Optimization → `solar`, `wind`
+- System Design → clear clutter, show `optimal`
+
+**Gotchas:**
+- Overlays use `useMap()` hook from react-leaflet - must be rendered inside MapContainer
+- `PolygonCoordinates` is interface `{lat, lng}`, array is `PolygonCoordinates[]`
+- Use `L.LatLngTuple` type assertion: `polygon.map(p => [p.lat, p.lng] as L.LatLngTuple)`
+- Clean up layers on unmount with `map.removeLayer(layer)`
+- Stagger zone animations with `setTimeout(fn, index * 80)` for visual effect
+
 ---
 
 *Last Updated: Jan 24, 2026*
-*Last Task Completed: 6.2*
+*Last Task Completed: 6.3*

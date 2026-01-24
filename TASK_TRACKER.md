@@ -850,22 +850,26 @@ Refactored to a modal "Prospecting Mode" approach:
 ---
 
 ### Task 6.3: Map Overlay System
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 
 **Subtasks:**
-- [ ] Create overlay layer management system
-- [ ] Implement terrain/elevation overlay (heat map style)
-- [ ] Implement solar irradiance overlay (yellow-orange gradient)
-- [ ] Implement wind potential overlay (blue gradient)
-- [ ] Implement exclusion zone overlay (red hatching)
-- [ ] Implement optimal zone highlighting (green)
-- [ ] Add fade-in animations for each layer
+- [x] Create overlay layer management system
+- [x] Implement terrain/elevation overlay (heat map style)
+- [x] Implement solar irradiance overlay (yellow-orange gradient)
+- [x] Implement wind potential overlay (blue gradient)
+- [x] Implement exclusion zone overlay (red hatching)
+- [x] Implement optimal zone highlighting (green)
+- [x] Add fade-in animations for each layer
+
+**Files Created:**
+- `components/map/overlays/analysis-overlays.tsx`
+- `components/map/overlays/index.ts`
 
 **Acceptance Criteria:**
-- [ ] Layers toggle on/off correctly
-- [ ] Colors are distinguishable
-- [ ] Performance remains good
-- [ ] Animations are smooth
+- [x] Layers toggle on/off correctly
+- [x] Colors are distinguishable
+- [x] Performance remains good
+- [x] Animations are smooth
 
 ---
 

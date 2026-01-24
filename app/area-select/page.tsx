@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Leaf, Crosshair, Ruler, MapPin, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { DynamicMap, type TileLayerType, type PolygonCoordinates } from '@/components/map';
+import { TerrainOverlay, SolarOverlay, WindOverlay, ExclusionOverlay, OptimalOverlay, type OverlayType } from '@/components/map/overlays';
 import { ConstraintsSidebar, FinancialConstraints, EnergyConstraints, LandConstraints, TechnicalConstraints, TimelineConstraints } from '@/components/constraints';
 import { AgentSidebar, type AnalysisPhase, type AgentMessageData, type AgentMessageType } from '@/components/agent';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,9 @@ const [isConstraintsSidebarOpen, setIsConstraintsSidebarOpen] = useState(false);
   const [currentPhase, setCurrentPhase] = useState<AnalysisPhase>('data-collection');
   const [agentMessages, setAgentMessages] = useState<AgentMessageData[]>([]);
   const [mapWidth, setMapWidth] = useState('100%');
+  
+  // Overlay visibility state
+  const [visibleOverlays, setVisibleOverlays] = useState<Set<OverlayType>>(new Set());
 
   const { draftConstraints, updateDraftConstraints } = usePlanStore();
 
@@ -213,11 +217,29 @@ const validation = useConstraintsValidation({
     setAgentMessages(prev => [...prev, message]);
   }, []);
 
+  // Helper to show/hide overlays
+  const showOverlay = useCallback((overlay: OverlayType) => {
+    setVisibleOverlays(prev => new Set(prev).add(overlay));
+  }, []);
+
+  const hideOverlay = useCallback((overlay: OverlayType) => {
+    setVisibleOverlays(prev => {
+      const next = new Set(prev);
+      next.delete(overlay);
+      return next;
+    });
+  }, []);
+
+  const clearAllOverlays = useCallback(() => {
+    setVisibleOverlays(new Set());
+  }, []);
+
   // Simulated analysis phases
   const runAnalysis = useCallback(async () => {
     setIsAnalyzing(true);
     setAgentMessages([]);
     setCurrentPhase('data-collection');
+    clearAllOverlays();
 
     // Phase 1: Data Collection
     addAgentMessage('info', 'Starting land analysis...');
@@ -225,6 +247,7 @@ const validation = useConstraintsValidation({
     addAgentMessage('loading', 'Loading satellite imagery for your selected area');
     await new Promise(r => setTimeout(r, 1200));
     addAgentMessage('search', 'Analyzing terrain elevation and slope gradients');
+    showOverlay('terrain'); // Show terrain overlay
     await new Promise(r => setTimeout(r, 1000));
     addAgentMessage('loading', 'Fetching historical weather data from NOAA');
     await new Promise(r => setTimeout(r, 1400));
@@ -237,7 +260,8 @@ const validation = useConstraintsValidation({
     await new Promise(r => setTimeout(r, 1000));
     addAgentMessage('info', `Budget range: $${budget[0].toLocaleString()} - $${budget[1].toLocaleString()}`);
     await new Promise(r => setTimeout(r, 800));
-    addAgentMessage('processing', 'Integrating land usage requirements');
+    addAgentMessage('processing', 'Identifying exclusion zones');
+    showOverlay('exclusion'); // Show exclusion zones
     await new Promise(r => setTimeout(r, 1000));
     addAgentMessage('info', `Primary goal: ${primaryGoal}`);
     await new Promise(r => setTimeout(r, 600));
@@ -247,10 +271,12 @@ const validation = useConstraintsValidation({
     setCurrentPhase('technology-optimization');
     await new Promise(r => setTimeout(r, 500));
     addAgentMessage('analysis', 'Evaluating solar panel configurations');
+    showOverlay('solar'); // Show solar irradiance
     await new Promise(r => setTimeout(r, 1200));
     addAgentMessage('info', 'Optimal panel: 400W monocrystalline bifacial');
     await new Promise(r => setTimeout(r, 800));
     addAgentMessage('analysis', 'Computing wind turbine potential');
+    showOverlay('wind'); // Show wind potential
     await new Promise(r => setTimeout(r, 1000));
     addAgentMessage('info', 'Average wind speed: 12 mph - suitable for micro turbines');
     await new Promise(r => setTimeout(r, 600));
@@ -260,6 +286,11 @@ const validation = useConstraintsValidation({
     setCurrentPhase('system-design');
     await new Promise(r => setTimeout(r, 500));
     addAgentMessage('processing', 'Generating optimal equipment layout');
+    hideOverlay('terrain'); // Clear some overlays to reduce clutter
+    hideOverlay('solar');
+    hideOverlay('wind');
+    await new Promise(r => setTimeout(r, 800));
+    showOverlay('optimal'); // Show optimal zones
     await new Promise(r => setTimeout(r, 1500));
     addAgentMessage('analysis', 'Calculating optimal panel tilt angle: 32°');
     await new Promise(r => setTimeout(r, 1000));
@@ -287,7 +318,7 @@ const validation = useConstraintsValidation({
     await new Promise(r => setTimeout(r, 400));
     addAgentMessage('success', 'Analysis complete! Your personalized energy plan is ready.');
     setIsAnalyzing(false);
-  }, [addAgentMessage, budget, primaryGoal]);
+  }, [addAgentMessage, budget, primaryGoal, showOverlay, hideOverlay, clearAllOverlays]);
 
   const handleAnalyze = useCallback(() => {
     if (!validation.canProceed) return;
@@ -312,12 +343,13 @@ const validation = useConstraintsValidation({
     setIsAnalyzing(false);
     setAgentMessages([]);
     setCurrentPhase('data-collection');
+    clearAllOverlays(); // Clear map overlays
     
     // Re-open constraints after animation
     setTimeout(() => {
       setIsConstraintsSidebarOpen(true);
     }, 350);
-  }, []);
+  }, [clearAllOverlays]);
 
   const handleViewPlan = useCallback(() => {
     router.push('/overview');
@@ -432,8 +464,34 @@ const validation = useConstraintsValidation({
                 onCancel={handleProspectCancel}
               />
 
-              {!isProspecting && prospectedArea && (
+{!isProspecting && prospectedArea && (
                 <CompletedPolygon coordinates={prospectedArea} />
+              )}
+
+              {/* Analysis Overlays */}
+              {prospectedArea && (
+                <>
+                  <TerrainOverlay
+                    polygon={prospectedArea}
+                    visible={visibleOverlays.has('terrain')}
+                  />
+                  <SolarOverlay
+                    polygon={prospectedArea}
+                    visible={visibleOverlays.has('solar')}
+                  />
+                  <WindOverlay
+                    polygon={prospectedArea}
+                    visible={visibleOverlays.has('wind')}
+                  />
+                  <ExclusionOverlay
+                    polygon={prospectedArea}
+                    visible={visibleOverlays.has('exclusion')}
+                  />
+                  <OptimalOverlay
+                    polygon={prospectedArea}
+                    visible={visibleOverlays.has('optimal')}
+                  />
+                </>
               )}
             </>
           )}
