@@ -5,7 +5,7 @@ import L from 'leaflet';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Leaf } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { DynamicMap, MapControls, type TileLayerType } from '@/components/map';
+import { DynamicMap, MapControls, AddressSearch, type TileLayerType } from '@/components/map';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -38,10 +38,13 @@ export default function AreaSelectPage() {
           className="h-full w-full"
         >
           {isMapReady && (
-            <MapControls
-              currentTileLayer={tileLayer}
-              onTileLayerChange={handleTileLayerChange}
-            />
+            <>
+              <MapControls
+                currentTileLayer={tileLayer}
+                onTileLayerChange={handleTileLayerChange}
+              />
+              <AddressSearch className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]" />
+            </>
           )}
         </DynamicMap>
       </motion.div>
@@ -50,39 +53,22 @@ export default function AreaSelectPage() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3, duration: 0.4 }}
-        className="absolute top-0 left-0 right-0 z-[1000] pointer-events-none"
+        className="absolute top-0 left-0 z-[1000] pointer-events-none"
       >
-        <div className="p-4 flex items-center justify-between">
-          <div className="flex items-center gap-4 pointer-events-auto">
-            <Button
-              variant="secondary"
-              size="icon"
-              onClick={() => router.push('/home')}
-              className="h-10 w-10 rounded-full bg-background/95 backdrop-blur-sm shadow-lg border border-border/50 hover:bg-background"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            
-            <div className="flex items-center gap-2 bg-background/95 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg border border-border/50">
-              <Leaf className="h-5 w-5 text-primary" />
-              <span className="font-semibold text-foreground">TerraWatt</span>
-            </div>
-          </div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: isMapReady ? 1 : 0, scale: isMapReady ? 1 : 0.9 }}
-            transition={{ delay: 0.5 }}
-            className="pointer-events-auto"
+        <div className="p-4 flex items-center gap-4 pointer-events-auto">
+          <Button
+            variant="secondary"
+            size="icon"
+            onClick={() => router.push('/home')}
+            className="h-10 w-10 rounded-full bg-background/95 backdrop-blur-sm shadow-lg border border-border/50 hover:bg-background"
           >
-            <div className="bg-background/95 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg border border-border/50">
-              <p className="text-sm text-muted-foreground">
-                <span className="hidden sm:inline">Use the search bar to find your property or </span>
-                <span className="font-medium text-foreground">pan and zoom</span>
-                <span className="hidden sm:inline"> to navigate</span>
-              </p>
-            </div>
-          </motion.div>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          
+          <div className="flex items-center gap-2 bg-background/95 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg border border-border/50">
+            <Leaf className="h-5 w-5 text-primary" />
+            <span className="font-semibold text-foreground">TerraWatt</span>
+          </div>
         </div>
       </motion.div>
 

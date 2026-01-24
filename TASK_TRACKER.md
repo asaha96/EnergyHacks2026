@@ -11,7 +11,7 @@ Use this document to track progress through the RALPH loop. Check off items as t
 | 1. Foundation | 5 | 5 | ✅ Complete |
 | 2. Landing & Auth | 5 | 5 | ✅ Complete |
 | 3. Home Dashboard | 3 | 3 | ✅ Complete |
-| 4. Map & Area Select | 6 | 2 | 🔄 In Progress |
+| 4. Map & Area Select | 6 | 3 | 🔄 In Progress |
 | 5. Constraints | 5 | 0 | ⬜ Not Started |
 | 6. Agent Analysis | 6 | 0 | ⬜ Not Started |
 | 7. Overview | 5 | 0 | ⬜ Not Started |
@@ -459,21 +459,36 @@ Use this document to track progress through the RALPH loop. Check off items as t
 ---
 
 ### Task 4.3: Address Search
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 
 **Subtasks:**
-- [ ] Create search input component (floating, top-center)
-- [ ] Integrate geocoding API (Nominatim or Mapbox)
-- [ ] Show autocomplete suggestions as dropdown
-- [ ] On select: fly to location with animation
-- [ ] Show recent searches (stored in localStorage)
-- [ ] Handle no results / errors gracefully
+- [x] Create search input component (floating, top-center)
+- [x] Integrate geocoding API (Nominatim or Mapbox)
+- [x] Show autocomplete suggestions as dropdown
+- [x] On select: fly to location with animation
+- [x] Show recent searches (stored in localStorage)
+- [x] Handle no results / errors gracefully
+
+**Files Created:**
+- `components/map/address-search.tsx` - Complete address search component
+
+**Features Implemented:**
+- Floating search bar positioned top-center of map
+- Nominatim geocoding API with 300ms debounce
+- Autocomplete dropdown with animated appearance
+- Keyboard navigation (arrow keys, enter, escape)
+- Recent searches stored in localStorage (max 5)
+- Loading spinner during search
+- Error handling with friendly messages
+- Fly-to animation on location select (zoom 16)
+- Clear button to reset search
+- US-focused results (countrycodes filter)
 
 **Acceptance Criteria:**
-- [ ] Typing shows suggestions
-- [ ] Selecting a suggestion flies to location
-- [ ] Recent searches persist
-- [ ] Errors show friendly message
+- [x] Typing shows suggestions
+- [x] Selecting a suggestion flies to location
+- [x] Recent searches persist
+- [x] Errors show friendly message
 
 ---
 
