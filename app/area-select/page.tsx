@@ -503,7 +503,7 @@ const validation = useConstraintsValidation({
       </AnimatePresence>
 
       <AnimatePresence>
-        {!isProspecting && prospectedArea && !isConstraintsSidebarOpen && (
+        {!isProspecting && prospectedArea && !isConstraintsSidebarOpen && !isAgentSidebarOpen && (
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
