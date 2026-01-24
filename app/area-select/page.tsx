@@ -1231,7 +1231,7 @@ export default function AreaSelectPage() {
         onClose={() => setIsAgentSidebarOpen(false)}
         onBack={handleBackToConstraints}
         onStop={handleStopAnalysis}
-        onSavePlan={handleSavePlan}
+        onSavePlan={() => handleSavePlan(false)}
         onStartOver={handleStartOver}
         isSaving={isSavingPlan}
         onMapWidthChange={handleMapWidthChange}
