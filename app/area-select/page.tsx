@@ -7,11 +7,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Leaf, Crosshair, Ruler, MapPin, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { DynamicMap, type TileLayerType, type PolygonCoordinates } from '@/components/map';
-import { ConstraintsSidebar, FinancialConstraints } from '@/components/constraints';
+import { ConstraintsSidebar, FinancialConstraints, EnergyConstraints, LandConstraints } from '@/components/constraints';
 import { Button } from '@/components/ui/button';
 import { calculateAreaWithUnits, formatArea, calculateCentroid } from '@/lib/geo';
 import { usePlanStore } from '@/stores/plan-store';
-import type { FinancingType } from '@/types/plan';
+import type { FinancingType, EnergyGoal, GridConnection } from '@/types/plan';
 
 const MapControls = dynamic(
   () => import('@/components/map/map-internals').then((mod) => mod.MapControls),
@@ -86,6 +86,63 @@ export default function AreaSelectPage() {
       },
     });
   }, [budget, financing, updateDraftConstraints]);
+
+  const primaryGoal: EnergyGoal = draftConstraints?.energy?.primaryGoal ?? 'offset';
+  const targetProduction: number | undefined = draftConstraints?.energy?.targetProduction;
+  const gridConnection: GridConnection = draftConstraints?.energy?.gridConnection ?? 'connected';
+
+  const handlePrimaryGoalChange = useCallback((value: EnergyGoal) => {
+    updateDraftConstraints({
+      energy: {
+        primaryGoal: value,
+        targetProduction,
+        gridConnection,
+      },
+    });
+  }, [targetProduction, gridConnection, updateDraftConstraints]);
+
+  const handleTargetProductionChange = useCallback((value: number | undefined) => {
+    updateDraftConstraints({
+      energy: {
+        primaryGoal,
+        targetProduction: value,
+        gridConnection,
+      },
+    });
+  }, [primaryGoal, gridConnection, updateDraftConstraints]);
+
+  const handleGridConnectionChange = useCallback((value: GridConnection) => {
+    updateDraftConstraints({
+      energy: {
+        primaryGoal,
+        targetProduction,
+        gridConnection: value,
+      },
+    });
+  }, [primaryGoal, targetProduction, updateDraftConstraints]);
+
+  const existingStructures: string[] = draftConstraints?.land?.existingStructures ?? [];
+  const currentUse: string[] = draftConstraints?.land?.currentUse ?? [];
+
+  const handleStructuresChange = useCallback((value: string[]) => {
+    updateDraftConstraints({
+      land: {
+        exclusionZones: draftConstraints?.land?.exclusionZones ?? [],
+        existingStructures: value,
+        currentUse,
+      },
+    });
+  }, [currentUse, draftConstraints?.land?.exclusionZones, updateDraftConstraints]);
+
+  const handleLandUseChange = useCallback((value: string[]) => {
+    updateDraftConstraints({
+      land: {
+        exclusionZones: draftConstraints?.land?.exclusionZones ?? [],
+        existingStructures,
+        currentUse: value,
+      },
+    });
+  }, [existingStructures, draftConstraints?.land?.exclusionZones, updateDraftConstraints]);
 
   useEffect(() => {
     if (!prospectedArea || prospectedArea.length < 3) {
@@ -352,6 +409,20 @@ export default function AreaSelectPage() {
           onFinancingChange={handleFinancingChange}
           onPaybackPriorityChange={handlePaybackPriorityChange}
           defaultOpen
+        />
+        <EnergyConstraints
+          primaryGoal={primaryGoal}
+          targetProduction={targetProduction}
+          gridConnection={gridConnection}
+          onPrimaryGoalChange={handlePrimaryGoalChange}
+          onTargetProductionChange={handleTargetProductionChange}
+          onGridConnectionChange={handleGridConnectionChange}
+        />
+        <LandConstraints
+          existingStructures={existingStructures}
+          currentUse={currentUse}
+          onStructuresChange={handleStructuresChange}
+          onLandUseChange={handleLandUseChange}
         />
       </ConstraintsSidebar>
     </div>
