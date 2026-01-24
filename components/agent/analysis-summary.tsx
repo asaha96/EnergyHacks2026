@@ -9,7 +9,8 @@ import {
   DollarSign, 
   TrendingUp,
   RotateCcw,
-  ArrowRight
+  ArrowRight,
+  type LucideIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -29,7 +30,7 @@ interface AnalysisSummaryProps {
 }
 
 interface MetricCardProps {
-  icon: React.ElementType;
+  icon: LucideIcon;
   label: string;
   value: string;
   subValue?: string;
