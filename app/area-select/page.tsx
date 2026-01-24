@@ -59,6 +59,11 @@ const AnalysisOverlay = nextDynamic(
   { ssr: false }
 );
 
+const MapTo3DTransition = nextDynamic(
+  () => import('@/components/3d/map-transition').then((mod) => mod.MapTo3DTransition),
+  { ssr: false }
+);
+
 export default function AreaSelectPage() {
   const router = useRouter();
   const mapRef = useRef<L.Map | null>(null);
@@ -95,6 +100,7 @@ export default function AreaSelectPage() {
   // -- 3D TERRAIN ANALYSIS STATE --
   const [show3DView, setShow3DView] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [isTransitioningTo3D, setIsTransitioningTo3D] = useState(false);
   // -------------------------------
 
   const { draftConstraints, updateDraftConstraints, addPlan, setDraftArea } = usePlanStore();
@@ -729,21 +735,27 @@ export default function AreaSelectPage() {
     // PRIVACY-FIRST AI CHECK - REMOVED for Late Consent Flow
     // We now allow analysis to run freely. Consent is requested at Save.
 
-    // Close constraints sidebar and show 3D terrain analysis view
+    // Close constraints sidebar and start the cinematic transition
     setIsConstraintsSidebarOpen(false);
     setIsAgentSidebarOpen(false);
-    setShow3DView(true);
     setAnalysisProgress(0);
+    setIsTransitioningTo3D(true);
+  }, [validation.canProceed]);
 
-    // Start the analysis after a brief delay for animation
+  const handleTransitionComplete = useCallback(() => {
+    setIsTransitioningTo3D(false);
+    setShow3DView(true);
+    
+    // Start the analysis after transition completes
     setTimeout(() => {
       runAnalysis();
-    }, 600);
-  }, [validation.canProceed, runAnalysis]);
+    }, 300);
+  }, [runAnalysis]);
 
   const handleStopAnalysis = useCallback(() => {
     setIsAnalyzing(false);
     setShow3DView(false);
+    setIsTransitioningTo3D(false);
     setAnalysisProgress(0);
     addAgentMessage('error', 'Analysis stopped by user');
   }, [addAgentMessage]);
@@ -751,6 +763,7 @@ export default function AreaSelectPage() {
   const handleBackToConstraints = useCallback(() => {
     setIsAgentSidebarOpen(false);
     setShow3DView(false);
+    setIsTransitioningTo3D(false);
     setIsAnalyzing(false);
     setAgentMessages([]);
     setCurrentPhase('data-collection');
@@ -913,6 +926,7 @@ export default function AreaSelectPage() {
     setLocationName(null);
     setIsAgentSidebarOpen(false);
     setShow3DView(false);
+    setIsTransitioningTo3D(false);
     setAnalysisProgress(0);
     summaryMessageRef.current = null;
   }, []);
@@ -997,19 +1011,19 @@ export default function AreaSelectPage() {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ 
-          opacity: show3DView ? 0 : 1, 
+          opacity: (show3DView || isTransitioningTo3D) ? 0 : 1, 
           width: mapWidth,
-          scale: show3DView ? 0.95 : 1
+          scale: (show3DView || isTransitioningTo3D) ? 0.95 : 1
         }}
         transition={{
-          opacity: { duration: 0.5 },
+          opacity: { duration: 0.6 },
           width: { type: 'spring', damping: 30, stiffness: 300 },
-          scale: { duration: 0.5 }
+          scale: { duration: 0.6 }
         }}
         className="absolute inset-0"
         style={{ 
           width: mapWidth,
-          pointerEvents: show3DView ? 'none' : 'auto'
+          pointerEvents: (show3DView || isTransitioningTo3D) ? 'none' : 'auto'
         }}
       >
         <DynamicMap
@@ -1090,6 +1104,13 @@ export default function AreaSelectPage() {
           )}
         </DynamicMap>
       </motion.div>
+
+      {/* Cinematic Transition from Map to 3D */}
+      <MapTo3DTransition
+        isTransitioning={isTransitioningTo3D}
+        onTransitionComplete={handleTransitionComplete}
+        locationName={locationName}
+      />
 
       {/* 3D Terrain Analysis View */}
       <TerrainAnalysisScene
