@@ -7,9 +7,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Leaf, Crosshair, Ruler, MapPin, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { DynamicMap, type TileLayerType, type PolygonCoordinates } from '@/components/map';
-import { ConstraintsSidebar } from '@/components/constraints';
+import { ConstraintsSidebar, FinancialConstraints } from '@/components/constraints';
 import { Button } from '@/components/ui/button';
 import { calculateAreaWithUnits, formatArea, calculateCentroid } from '@/lib/geo';
+import { usePlanStore } from '@/stores/plan-store';
+import type { FinancingType } from '@/types/plan';
 
 const MapControls = dynamic(
   () => import('@/components/map/map-internals').then((mod) => mod.MapControls),
@@ -42,6 +44,48 @@ export default function AreaSelectPage() {
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [isConstraintsSidebarOpen, setIsConstraintsSidebarOpen] = useState(false);
   const [mapWidth, setMapWidth] = useState('100%');
+
+  const { draftConstraints, updateDraftConstraints } = usePlanStore();
+
+  const budget: [number, number] = [
+    draftConstraints?.budget?.min ?? 50000,
+    draftConstraints?.budget?.max ?? 150000,
+  ];
+  const financing: FinancingType = draftConstraints?.budget?.financing ?? 'undecided';
+  const paybackPriority: number = draftConstraints?.budget?.paybackPriority ?? 50;
+
+  const handleBudgetChange = useCallback((value: [number, number]) => {
+    updateDraftConstraints({
+      budget: {
+        min: value[0],
+        max: value[1],
+        financing,
+        paybackPriority,
+      },
+    });
+  }, [financing, paybackPriority, updateDraftConstraints]);
+
+  const handleFinancingChange = useCallback((value: FinancingType) => {
+    updateDraftConstraints({
+      budget: {
+        min: budget[0],
+        max: budget[1],
+        financing: value,
+        paybackPriority,
+      },
+    });
+  }, [budget, paybackPriority, updateDraftConstraints]);
+
+  const handlePaybackPriorityChange = useCallback((value: number) => {
+    updateDraftConstraints({
+      budget: {
+        min: budget[0],
+        max: budget[1],
+        financing,
+        paybackPriority: value,
+      },
+    });
+  }, [budget, financing, updateDraftConstraints]);
 
   useEffect(() => {
     if (!prospectedArea || prospectedArea.length < 3) {
@@ -299,7 +343,17 @@ export default function AreaSelectPage() {
         isOpen={isConstraintsSidebarOpen}
         onClose={handleCloseConstraintsSidebar}
         onMapWidthChange={handleMapWidthChange}
-      />
+      >
+        <FinancialConstraints
+          budget={budget}
+          financing={financing}
+          paybackPriority={paybackPriority}
+          onBudgetChange={handleBudgetChange}
+          onFinancingChange={handleFinancingChange}
+          onPaybackPriorityChange={handlePaybackPriorityChange}
+          defaultOpen
+        />
+      </ConstraintsSidebar>
     </div>
   );
 }
