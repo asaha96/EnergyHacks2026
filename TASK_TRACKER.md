@@ -11,7 +11,7 @@ Use this document to track progress through the RALPH loop. Check off items as t
 | 1. Foundation | 5 | 5 | ✅ Complete |
 | 2. Landing & Auth | 5 | 5 | ✅ Complete |
 | 3. Home Dashboard | 3 | 3 | ✅ Complete |
-| 4. Map & Area Select | 6 | 3 | 🔄 In Progress |
+| 4. Map & Area Select | 6 | 4 | 🔄 In Progress |
 | 5. Constraints | 5 | 0 | ⬜ Not Started |
 | 6. Agent Analysis | 6 | 0 | ⬜ Not Started |
 | 7. Overview | 5 | 0 | ⬜ Not Started |
@@ -493,23 +493,39 @@ Use this document to track progress through the RALPH loop. Check off items as t
 ---
 
 ### Task 4.4: Polygon Drawing
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 
 **Subtasks:**
-- [ ] Install react-leaflet-draw
-- [ ] Create drawing toolbar (floating, left side)
-- [ ] Enable polygon drawing mode
-- [ ] Enable rectangle drawing mode (alternative)
-- [ ] Style the drawn polygon (fill color, border)
-- [ ] Add vertex editing (drag to adjust)
-- [ ] Add delete/clear functionality
-- [ ] Store polygon coordinates in state
+- [x] Install react-leaflet-draw
+- [x] Create drawing toolbar (floating, left side)
+- [x] Enable polygon drawing mode
+- [x] Enable rectangle drawing mode (alternative)
+- [x] Style the drawn polygon (fill color, border)
+- [x] Add vertex editing (drag to adjust)
+- [x] Add delete/clear functionality
+- [x] Store polygon coordinates in state
+
+**Files Created:**
+- `components/map/polygon-draw.tsx` - Drawing tools with polygon/rectangle modes
+- `components/map/map-internals.tsx` - SSR-safe re-exports for map components
+
+**Features Implemented:**
+- Floating drawing toolbar on left side with mode indicators
+- Polygon drawing: click to add points, double-click/Enter to finish
+- Rectangle drawing: click and drag to draw
+- Polygon styled with primary color (oklch), 20% fill opacity
+- Edit mode with dashed border indicator
+- Delete/clear button with destructive styling
+- Real-time coordinate updates to parent component
+- Context-aware instruction tooltips
+- Keyboard support (Escape to cancel, Enter to finish)
+- Dynamic imports to avoid SSR issues
 
 **Acceptance Criteria:**
-- [ ] Can draw polygons by clicking
-- [ ] Can edit vertices after drawing
-- [ ] Can delete and start over
-- [ ] Polygon styled consistently with app
+- [x] Can draw polygons by clicking
+- [x] Can edit vertices after drawing
+- [x] Can delete and start over
+- [x] Polygon styled consistently with app
 
 ---
 

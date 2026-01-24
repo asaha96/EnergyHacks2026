@@ -1,19 +1,36 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import L from 'leaflet';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Leaf } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { DynamicMap, MapControls, AddressSearch, type TileLayerType } from '@/components/map';
+import { DynamicMap, type TileLayerType, type PolygonCoordinates } from '@/components/map';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+
+const MapControls = dynamic(
+  () => import('@/components/map/map-internals').then((mod) => mod.MapControls),
+  { ssr: false }
+);
+
+const AddressSearch = dynamic(
+  () => import('@/components/map/map-internals').then((mod) => mod.AddressSearch),
+  { ssr: false }
+);
+
+const PolygonDraw = dynamic(
+  () => import('@/components/map/map-internals').then((mod) => mod.PolygonDraw),
+  { ssr: false }
+);
 
 export default function AreaSelectPage() {
   const router = useRouter();
   const mapRef = useRef<L.Map | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [tileLayer, setTileLayer] = useState<TileLayerType>('positron');
+  const [polygon, setPolygon] = useState<PolygonCoordinates[] | null>(null);
 
   const handleMapReady = useCallback((map: L.Map) => {
     mapRef.current = map;
@@ -23,6 +40,12 @@ export default function AreaSelectPage() {
   const handleTileLayerChange = useCallback((layer: TileLayerType) => {
     setTileLayer(layer);
   }, []);
+
+  const handlePolygonChange = useCallback((coords: PolygonCoordinates[] | null) => {
+    setPolygon(coords);
+  }, []);
+
+  const hasPolygon = polygon && polygon.length >= 3;
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background">
@@ -44,6 +67,7 @@ export default function AreaSelectPage() {
                 onTileLayerChange={handleTileLayerChange}
               />
               <AddressSearch className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]" />
+              <PolygonDraw onPolygonChange={handlePolygonChange} />
             </>
           )}
         </DynamicMap>
@@ -74,12 +98,13 @@ export default function AreaSelectPage() {
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: isMapReady ? 1 : 0, y: isMapReady ? 0 : 20 }}
-        transition={{ delay: 0.6, duration: 0.4 }}
+        animate={{ opacity: hasPolygon ? 0 : 1, y: hasPolygon ? 20 : 0 }}
+        transition={{ duration: 0.3 }}
         className={cn(
           "absolute bottom-6 left-1/2 -translate-x-1/2 z-[1000]",
           "bg-background/95 backdrop-blur-sm rounded-2xl shadow-lg border border-border/50",
-          "px-6 py-4"
+          "px-6 py-4",
+          hasPolygon && "pointer-events-none"
         )}
       >
         <div className="flex flex-col items-center gap-2 text-center">
@@ -90,7 +115,7 @@ export default function AreaSelectPage() {
             </span>
           </div>
           <p className="text-xs text-muted-foreground max-w-xs">
-            Drawing tools coming next - you&apos;ll be able to outline your property boundaries
+            Use the drawing tools on the left to outline your property boundaries
           </p>
         </div>
       </motion.div>
