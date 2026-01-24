@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
             if (signupData.code === 'invalid_signup') {
                 const descString = typeof signupData.description === 'string' ? signupData.description : JSON.stringify(signupData.description || '');
 
-                if (descString.toLowerCase().includes('already exists')) {
+                if (descString.toLowerCase().includes('already exists') || descString.toLowerCase() === 'invalid sign up') {
                     // User exists, try to log them in
                     isNewUser = false;
                 } else {
