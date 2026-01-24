@@ -6,7 +6,7 @@ import L from 'leaflet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Leaf, Crosshair, Ruler, MapPin, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { DynamicMap, type TileLayerType, type PolygonCoordinates } from '@/components/map';
+import { DynamicMap, type TileLayerType, type PolygonCoordinates, type EquipmentPlacement } from '@/components/map';
 import { TerrainOverlay, SolarOverlay, WindOverlay, ExclusionOverlay, OptimalOverlay, type OverlayType } from '@/components/map/overlays';
 import { ConstraintsSidebar, FinancialConstraints, EnergyConstraints, LandConstraints, TechnicalConstraints, TimelineConstraints } from '@/components/constraints';
 import { AgentSidebar, type AnalysisPhase, type AgentMessageData, type AgentMessageType } from '@/components/agent';
@@ -36,6 +36,16 @@ const CompletedPolygon = dynamic(
   { ssr: false }
 );
 
+const EquipmentMarkerGroup = dynamic(
+  () => import('@/components/map/markers/equipment-marker').then((mod) => mod.EquipmentMarkerGroup),
+  { ssr: false }
+);
+
+const ZoneLabel = dynamic(
+  () => import('@/components/map/markers/zone-label').then((mod) => mod.ZoneLabel),
+  { ssr: false }
+);
+
 export default function AreaSelectPage() {
   const router = useRouter();
   const mapRef = useRef<L.Map | null>(null);
@@ -52,10 +62,18 @@ const [isConstraintsSidebarOpen, setIsConstraintsSidebarOpen] = useState(false);
   const [agentMessages, setAgentMessages] = useState<AgentMessageData[]>([]);
   const [mapWidth, setMapWidth] = useState('100%');
   
-  // Overlay visibility state
   const [visibleOverlays, setVisibleOverlays] = useState<Set<OverlayType>>(new Set());
+  const [equipmentPlacements, setEquipmentPlacements] = useState<EquipmentPlacement[]>([]);
+  const [showEquipment, setShowEquipment] = useState(false);
+  const [zoneLabels, setZoneLabels] = useState<Array<{
+    id: string;
+    position: { lat: number; lng: number };
+    type: 'optimal' | 'exclusion';
+    label: string;
+  }>>([]);
+  const [isSavingPlan, setIsSavingPlan] = useState(false);
 
-  const { draftConstraints, updateDraftConstraints } = usePlanStore();
+  const { draftConstraints, updateDraftConstraints, addPlan, setCurrentPlan, setDraftArea } = usePlanStore();
 
   const budget: [number, number] = [
     draftConstraints?.budget?.min ?? 50000,
@@ -206,15 +224,40 @@ const validation = useConstraintsValidation({
     timeline,
   });
 
-  // Helper to add agent messages
-  const addAgentMessage = useCallback((type: AgentMessageType, text: string) => {
+  const addAgentMessage = useCallback((
+    type: AgentMessageType, 
+    text: string, 
+    options?: { 
+      status?: 'active' | 'completed';
+      resolvedType?: AgentMessageType;
+      detail?: string;
+      value?: string | number;
+    }
+  ): string => {
+    const id = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const message: AgentMessageData = {
-      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id,
       type,
       text,
       timestamp: new Date(),
+      status: options?.status ?? 'completed',
+      resolvedType: options?.resolvedType,
+      detail: options?.detail,
+      value: options?.value,
     };
     setAgentMessages(prev => [...prev, message]);
+    return id;
+  }, []);
+
+  const updateAgentMessage = useCallback((
+    id: string,
+    updates: Partial<Pick<AgentMessageData, 'status' | 'resolvedType' | 'text' | 'detail' | 'value'>>
+  ) => {
+    setAgentMessages(prev => 
+      prev.map(msg => 
+        msg.id === id ? { ...msg, ...updates } : msg
+      )
+    );
   }, []);
 
   // Helper to show/hide overlays
@@ -234,91 +277,417 @@ const validation = useConstraintsValidation({
     setVisibleOverlays(new Set());
   }, []);
 
-  // Simulated analysis phases
+  const generateEquipmentPlacements = useCallback((polygon: PolygonCoordinates[]): EquipmentPlacement[] => {
+    if (!polygon || polygon.length < 3) return [];
+
+    const bounds = {
+      minLat: Math.min(...polygon.map(p => p.lat)),
+      maxLat: Math.max(...polygon.map(p => p.lat)),
+      minLng: Math.min(...polygon.map(p => p.lng)),
+      maxLng: Math.max(...polygon.map(p => p.lng)),
+    };
+
+    const latRange = bounds.maxLat - bounds.minLat;
+    const lngRange = bounds.maxLng - bounds.minLng;
+
+    const placements: EquipmentPlacement[] = [];
+
+    placements.push({
+      id: 'solar-array-1',
+      type: 'solar-array',
+      position: {
+        lat: bounds.minLat + latRange * 0.35,
+        lng: bounds.minLng + lngRange * 0.45,
+      },
+      label: 'Main Solar Array',
+      details: {
+        model: 'SunPower M440',
+        capacity: '35 kW',
+        quantity: 88,
+        orientation: 180,
+      },
+    });
+
+    placements.push({
+      id: 'solar-array-2',
+      type: 'solar-array',
+      position: {
+        lat: bounds.minLat + latRange * 0.65,
+        lng: bounds.minLng + lngRange * 0.25,
+      },
+      label: 'Secondary Array',
+      details: {
+        model: 'SunPower M440',
+        capacity: '10 kW',
+        quantity: 25,
+        orientation: 180,
+      },
+    });
+
+    if (technologies.includes('wind')) {
+      placements.push({
+        id: 'wind-turbine-1',
+        type: 'wind-turbine',
+        position: {
+          lat: bounds.minLat + latRange * 0.75,
+          lng: bounds.minLng + lngRange * 0.7,
+        },
+        label: 'Micro Wind Turbine',
+        details: {
+          model: 'Bergey Excel 6',
+          capacity: '6 kW',
+          quantity: 1,
+        },
+      });
+    }
+
+    if (technologies.includes('storage')) {
+      placements.push({
+        id: 'battery-1',
+        type: 'battery',
+        position: {
+          lat: bounds.minLat + latRange * 0.2,
+          lng: bounds.minLng + lngRange * 0.8,
+        },
+        label: 'Battery Storage',
+        details: {
+          model: 'Tesla Powerwall 3',
+          capacity: '27 kWh',
+          quantity: 2,
+        },
+      });
+    }
+
+    placements.push({
+      id: 'inverter-1',
+      type: 'inverter',
+      position: {
+        lat: bounds.minLat + latRange * 0.25,
+        lng: bounds.minLng + lngRange * 0.75,
+      },
+      label: 'Solar Inverter',
+      details: {
+        model: 'SolarEdge SE11400H',
+        capacity: '11.4 kW',
+        quantity: 4,
+      },
+    });
+
+    placements.push({
+      id: 'meter-1',
+      type: 'meter',
+      position: {
+        lat: bounds.minLat + latRange * 0.15,
+        lng: bounds.minLng + lngRange * 0.85,
+      },
+      label: 'Smart Meter',
+      details: {
+        model: 'Sense Energy Monitor',
+      },
+    });
+
+    return placements;
+  }, [technologies]);
+
+  const generateZoneLabels = useCallback((polygon: PolygonCoordinates[]) => {
+    if (!polygon || polygon.length < 3) return [];
+
+    const bounds = {
+      minLat: Math.min(...polygon.map(p => p.lat)),
+      maxLat: Math.max(...polygon.map(p => p.lat)),
+      minLng: Math.min(...polygon.map(p => p.lng)),
+      maxLng: Math.max(...polygon.map(p => p.lng)),
+    };
+
+    const latRange = bounds.maxLat - bounds.minLat;
+    const lngRange = bounds.maxLng - bounds.minLng;
+
+    return [
+      {
+        id: 'optimal-zone-1',
+        position: {
+          lat: bounds.minLat + latRange * 0.45,
+          lng: bounds.minLng + lngRange * 0.55,
+        },
+        type: 'optimal' as const,
+        label: 'Optimal Zone A',
+      },
+      {
+        id: 'optimal-zone-2',
+        position: {
+          lat: bounds.minLat + latRange * 0.7,
+          lng: bounds.minLng + lngRange * 0.2,
+        },
+        type: 'optimal' as const,
+        label: 'Optimal Zone B',
+      },
+      {
+        id: 'exclusion-zone-1',
+        position: {
+          lat: bounds.minLat + latRange * 0.08,
+          lng: bounds.minLng + lngRange * 0.1,
+        },
+        type: 'exclusion' as const,
+        label: 'Setback Area',
+      },
+    ];
+  }, []);
+
+  const clearEquipment = useCallback(() => {
+    setEquipmentPlacements([]);
+    setShowEquipment(false);
+    setZoneLabels([]);
+  }, []);
+
   const runAnalysis = useCallback(async () => {
     setIsAnalyzing(true);
     setAgentMessages([]);
     setCurrentPhase('data-collection');
     clearAllOverlays();
+    clearEquipment();
 
-    // Phase 1: Data Collection
-    addAgentMessage('info', 'Starting land analysis...');
-    await new Promise(r => setTimeout(r, 800));
-    addAgentMessage('loading', 'Loading satellite imagery for your selected area');
-    await new Promise(r => setTimeout(r, 1200));
-    addAgentMessage('search', 'Analyzing terrain elevation and slope gradients');
-    showOverlay('terrain'); // Show terrain overlay
-    await new Promise(r => setTimeout(r, 1000));
-    addAgentMessage('loading', 'Fetching historical weather data from NOAA');
-    await new Promise(r => setTimeout(r, 1400));
-    addAgentMessage('success', 'Data collection complete');
+    const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-    // Phase 2: Constraint Integration
+    const thinkThenComplete = async (
+      thinkingText: string,
+      completedText: string,
+      type: AgentMessageType,
+      resolvedType: AgentMessageType,
+      thinkDuration: number,
+      options?: { detail?: string; value?: string | number }
+    ) => {
+      const id = addAgentMessage(type, thinkingText, { status: 'active' });
+      await delay(thinkDuration);
+      updateAgentMessage(id, { 
+        status: 'completed', 
+        text: completedText,
+        resolvedType,
+        ...options 
+      });
+    };
+
+    addAgentMessage('thinking', 'Initializing analysis agent', { status: 'active' });
+    await delay(600);
+    setAgentMessages(prev => prev.map((m, i) => i === 0 ? { ...m, status: 'completed' as const, text: 'Analysis agent initialized' } : m));
+
+    await thinkThenComplete(
+      'Querying satellite imagery APIs...',
+      'Loaded high-resolution satellite imagery',
+      'data',
+      'success',
+      1200,
+      { detail: 'Source: Sentinel-2 L2A, 10m resolution' }
+    );
+
+    await thinkThenComplete(
+      'Processing terrain elevation data...',
+      'Terrain analysis complete',
+      'search',
+      'success',
+      1000,
+      { detail: 'Elevation range: 342-385ft, Avg slope: 3.2°' }
+    );
+    showOverlay('terrain');
+
+    await thinkThenComplete(
+      'Fetching 10-year weather history from NOAA...',
+      'Weather data integrated',
+      'data',
+      'success',
+      1400,
+      { detail: 'Annual avg: 4.2 kWh/m²/day solar, 8.3 mph wind' }
+    );
+
+    addAgentMessage('success', 'Data collection complete', { 
+      value: '3 data sources integrated' 
+    });
+
     setCurrentPhase('constraint-integration');
-    await new Promise(r => setTimeout(r, 600));
-    addAgentMessage('processing', 'Applying your budget constraints');
-    await new Promise(r => setTimeout(r, 1000));
-    addAgentMessage('info', `Budget range: $${budget[0].toLocaleString()} - $${budget[1].toLocaleString()}`);
-    await new Promise(r => setTimeout(r, 800));
-    addAgentMessage('processing', 'Identifying exclusion zones');
-    showOverlay('exclusion'); // Show exclusion zones
-    await new Promise(r => setTimeout(r, 1000));
-    addAgentMessage('info', `Primary goal: ${primaryGoal}`);
-    await new Promise(r => setTimeout(r, 600));
-    addAgentMessage('success', 'All constraints applied successfully');
+    await delay(400);
 
-    // Phase 3: Technology Optimization
+    await thinkThenComplete(
+      'Analyzing budget parameters...',
+      'Budget constraints applied',
+      'processing',
+      'success',
+      900,
+      { value: `$${budget[0].toLocaleString()} - $${budget[1].toLocaleString()}` }
+    );
+
+    await thinkThenComplete(
+      'Mapping property boundaries and setbacks...',
+      'Exclusion zones identified',
+      'search',
+      'success',
+      1100,
+      { detail: '15ft property setback, utility easement detected' }
+    );
+    showOverlay('exclusion');
+
+    const goalLabels: Record<string, string> = {
+      'offset': 'Full energy offset',
+      'maximize': 'Maximum production',
+      'minimize': 'Cost minimization',
+    };
+    addAgentMessage('info', `Energy goal: ${goalLabels[primaryGoal] || primaryGoal}`);
+    await delay(400);
+
+    addAgentMessage('success', 'Constraints validated', {
+      detail: 'All parameters within acceptable ranges'
+    });
+
     setCurrentPhase('technology-optimization');
-    await new Promise(r => setTimeout(r, 500));
-    addAgentMessage('analysis', 'Evaluating solar panel configurations');
-    showOverlay('solar'); // Show solar irradiance
-    await new Promise(r => setTimeout(r, 1200));
-    addAgentMessage('info', 'Optimal panel: 400W monocrystalline bifacial');
-    await new Promise(r => setTimeout(r, 800));
-    addAgentMessage('analysis', 'Computing wind turbine potential');
-    showOverlay('wind'); // Show wind potential
-    await new Promise(r => setTimeout(r, 1000));
-    addAgentMessage('info', 'Average wind speed: 12 mph - suitable for micro turbines');
-    await new Promise(r => setTimeout(r, 600));
-    addAgentMessage('success', 'Technology selection complete');
+    await delay(400);
 
-    // Phase 4: System Design
+    await thinkThenComplete(
+      'Running solar irradiance simulation...',
+      'Solar potential mapped',
+      'analysis',
+      'success',
+      1300,
+      { value: '1,650 kWh/kW/year potential' }
+    );
+    showOverlay('solar');
+
+    await thinkThenComplete(
+      'Evaluating panel configurations...',
+      'Optimal panel selected',
+      'processing',
+      'insight',
+      1000,
+      { detail: 'SunPower M440 Bifacial - best efficiency for your conditions' }
+    );
+
+    if (technologies.includes('wind')) {
+      await thinkThenComplete(
+        'Analyzing wind patterns and turbulence...',
+        'Wind assessment complete',
+        'analysis',
+        'success',
+        1100,
+        { value: '12 mph average', detail: 'Suitable for micro-turbine installation' }
+      );
+      showOverlay('wind');
+    }
+
+    addAgentMessage('success', 'Technology stack optimized');
+
     setCurrentPhase('system-design');
-    await new Promise(r => setTimeout(r, 500));
-    addAgentMessage('processing', 'Generating optimal equipment layout');
-    hideOverlay('terrain'); // Clear some overlays to reduce clutter
+    await delay(400);
+
+    hideOverlay('terrain');
     hideOverlay('solar');
     hideOverlay('wind');
-    await new Promise(r => setTimeout(r, 800));
-    showOverlay('optimal'); // Show optimal zones
-    await new Promise(r => setTimeout(r, 1500));
-    addAgentMessage('analysis', 'Calculating optimal panel tilt angle: 32°');
-    await new Promise(r => setTimeout(r, 1000));
-    addAgentMessage('info', 'Identified 2 optimal zones for solar array placement');
-    await new Promise(r => setTimeout(r, 800));
-    addAgentMessage('info', 'Estimated system capacity: 45 kW');
-    await new Promise(r => setTimeout(r, 600));
-    addAgentMessage('success', 'System design finalized');
 
-    // Phase 5: Financial Modeling
+    await thinkThenComplete(
+      'Computing optimal equipment placement...',
+      'Layout algorithm complete',
+      'processing',
+      'success',
+      1200
+    );
+
+    showOverlay('optimal');
+    
+    if (prospectedArea) {
+      const labels = generateZoneLabels(prospectedArea);
+      setZoneLabels(labels);
+    }
+
+    await thinkThenComplete(
+      'Calculating solar panel orientation...',
+      'Panel orientation optimized',
+      'calculation',
+      'insight',
+      1000,
+      { value: '32° tilt, 180° azimuth', detail: 'Maximizes annual energy capture' }
+    );
+
+    addAgentMessage('info', '2 optimal zones identified for installation', {
+      detail: 'Zone A: Primary array (35 kW) | Zone B: Secondary (10 kW)'
+    });
+    
+    if (prospectedArea) {
+      const placements = generateEquipmentPlacements(prospectedArea);
+      setEquipmentPlacements(placements);
+      setShowEquipment(true);
+    }
+    await delay(600);
+
+    addAgentMessage('success', 'System design finalized', {
+      value: '45 kW total capacity'
+    });
+
     setCurrentPhase('financial-modeling');
-    await new Promise(r => setTimeout(r, 500));
-    addAgentMessage('loading', 'Calculating installation costs');
-    await new Promise(r => setTimeout(r, 1200));
-    addAgentMessage('analysis', 'Applying federal tax credits (30% ITC)');
-    await new Promise(r => setTimeout(r, 1000));
-    addAgentMessage('info', 'Estimated annual production: 45,000 kWh');
-    await new Promise(r => setTimeout(r, 800));
-    addAgentMessage('result', 'Projected payback period: 7.2 years');
-    await new Promise(r => setTimeout(r, 600));
-    addAgentMessage('result', '25-year savings: $127,500');
+    await delay(400);
 
-    // Complete
+    await thinkThenComplete(
+      'Calculating equipment and installation costs...',
+      'Cost model complete',
+      'calculation',
+      'success',
+      1100,
+      { value: `$${Math.round((budget[0] + budget[1]) / 2).toLocaleString()} estimated` }
+    );
+
+    await thinkThenComplete(
+      'Applying incentives and tax credits...',
+      'Federal ITC applied',
+      'calculation',
+      'insight',
+      900,
+      { value: '30% tax credit', detail: '$27,000+ in federal incentives' }
+    );
+
+    addAgentMessage('result', 'Estimated annual production', {
+      value: '58,500 kWh/year',
+      detail: 'Based on local solar irradiance and system efficiency'
+    });
+    await delay(500);
+
+    addAgentMessage('result', 'Projected payback period', {
+      value: '6.8 years',
+      detail: 'Accounting for utility rate increases and degradation'
+    });
+    await delay(500);
+
+    addAgentMessage('result', '25-year net savings', {
+      value: '$147,200',
+      detail: 'After system costs and maintenance'
+    });
+
     setCurrentPhase('complete');
-    await new Promise(r => setTimeout(r, 400));
-    addAgentMessage('success', 'Analysis complete! Your personalized energy plan is ready.');
+    await delay(300);
+    
     setIsAnalyzing(false);
-  }, [addAgentMessage, budget, primaryGoal, showOverlay, hideOverlay, clearAllOverlays]);
+  }, [addAgentMessage, updateAgentMessage, budget, primaryGoal, technologies, showOverlay, hideOverlay, clearAllOverlays, clearEquipment, prospectedArea, generateEquipmentPlacements, generateZoneLabels]);
+
+  const summaryMessageRef = useRef<string | null>(null);
+  
+  const addSummaryMessage = useCallback(() => {
+    const avgBudget = (budget[0] + budget[1]) / 2;
+    const id = `msg-summary-${Date.now()}`;
+    summaryMessageRef.current = id;
+    
+    const message: AgentMessageData = {
+      id,
+      type: 'summary',
+      text: 'Your Energy Plan Summary',
+      timestamp: new Date(),
+      status: 'completed',
+      summaryData: {
+        systemSizeKw: 45,
+        annualProductionKwh: 58500,
+        totalCost: avgBudget,
+        netCost: Math.round(avgBudget * 0.7),
+        paybackYears: 6.8,
+        annualSavings: Math.round(avgBudget / 6.8),
+        co2OffsetTons: 28.5,
+        isSaving: false,
+      },
+    };
+    setAgentMessages(prev => [...prev, message]);
+  }, [budget]);
 
   const handleAnalyze = useCallback(() => {
     if (!validation.canProceed) return;
@@ -343,17 +712,101 @@ const validation = useConstraintsValidation({
     setIsAnalyzing(false);
     setAgentMessages([]);
     setCurrentPhase('data-collection');
-    clearAllOverlays(); // Clear map overlays
+    clearAllOverlays();
+    clearEquipment();
     
-    // Re-open constraints after animation
     setTimeout(() => {
       setIsConstraintsSidebarOpen(true);
     }, 350);
-  }, [clearAllOverlays]);
+  }, [clearAllOverlays, clearEquipment]);
 
-  const handleViewPlan = useCallback(() => {
+  const getAnalysisValues = useCallback(() => {
+    const avgBudget = (budget[0] + budget[1]) / 2;
+    return {
+      systemSizeKw: 45,
+      annualProductionKwh: 58500,
+      totalCost: avgBudget,
+      netCost: Math.round(avgBudget * 0.7),
+      paybackYears: 6.8,
+      annualSavings: Math.round(avgBudget / 6.8),
+      co2OffsetTons: 28.5,
+    };
+  }, [budget]);
+
+  const handleSavePlan = useCallback(async () => {
+    if (!prospectedArea) return;
+    
+    setIsSavingPlan(true);
+    
+    const analysisValues = getAnalysisValues();
+    const centroid = calculateCentroid(prospectedArea);
+    const areaData = calculateAreaWithUnits(prospectedArea);
+    
+    const newPlan = {
+      id: `plan-${Date.now()}`,
+      userId: 'mock-user',
+      name: locationName || `Plan ${new Date().toLocaleDateString()}`,
+      status: 'complete' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      area: {
+        coordinates: prospectedArea.map(p => ({ lat: p.lat, lng: p.lng })),
+        center: centroid,
+        areaAcres: areaData.acres,
+        address: locationName || undefined,
+      },
+      constraints: draftConstraints ? {
+        budget: draftConstraints.budget!,
+        energy: draftConstraints.energy!,
+        land: draftConstraints.land || { exclusionZones: [], existingStructures: [], currentUse: [] },
+        technical: draftConstraints.technical!,
+        timeline: draftConstraints.timeline || 'exploring',
+      } : undefined,
+      analysis: {
+        systemSizeKw: analysisValues.systemSizeKw,
+        annualProductionKwh: analysisValues.annualProductionKwh,
+        co2OffsetTons: analysisValues.co2OffsetTons,
+        equipmentPlacements: equipmentPlacements.map(ep => ({
+          equipmentId: ep.id,
+          position: ep.position,
+          orientation: ep.details?.orientation,
+        })),
+      },
+      financials: {
+        totalCost: analysisValues.totalCost,
+        netCostAfterIncentives: analysisValues.netCost,
+        annualSavings: analysisValues.annualSavings,
+        paybackYears: analysisValues.paybackYears,
+        roi25Year: analysisValues.annualSavings * 25 - analysisValues.netCost,
+        incentives: [
+          { name: 'Federal ITC', amount: analysisValues.totalCost * 0.3, description: '30% federal tax credit' },
+        ],
+      },
+    };
+    
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    addPlan(newPlan);
+    setCurrentPlan(newPlan.id);
+    setDraftArea(null);
+    
+    setIsSavingPlan(false);
     router.push('/overview');
-  }, [router]);
+  }, [prospectedArea, getAnalysisValues, locationName, draftConstraints, equipmentPlacements, addPlan, setCurrentPlan, setDraftArea, router]);
+
+  const handleStartOver = useCallback(() => {
+    setVisibleOverlays(new Set());
+    setEquipmentPlacements([]);
+    setShowEquipment(false);
+    setZoneLabels([]);
+    setAgentMessages([]);
+    setCurrentPhase('data-collection');
+    setIsAnalyzing(false);
+    setProspectedArea(null);
+    setLocationName(null);
+    setIsAgentSidebarOpen(false);
+    summaryMessageRef.current = null;
+  }, []);
 
   useEffect(() => {
     if (!prospectedArea || prospectedArea.length < 3) {
@@ -384,6 +837,12 @@ const validation = useConstraintsValidation({
         setIsLoadingLocation(false);
       });
   }, [prospectedArea]);
+
+  useEffect(() => {
+    if (currentPhase === 'complete' && !isAnalyzing && !summaryMessageRef.current) {
+      addSummaryMessage();
+    }
+  }, [currentPhase, isAnalyzing, addSummaryMessage]);
 
   const handleMapReady = useCallback((map: L.Map) => {
     mapRef.current = map;
@@ -468,7 +927,6 @@ const validation = useConstraintsValidation({
                 <CompletedPolygon coordinates={prospectedArea} />
               )}
 
-              {/* Analysis Overlays */}
               {prospectedArea && (
                 <>
                   <TerrainOverlay
@@ -493,6 +951,24 @@ const validation = useConstraintsValidation({
                   />
                 </>
               )}
+
+              {showEquipment && equipmentPlacements.length > 0 && (
+                <EquipmentMarkerGroup
+                  placements={equipmentPlacements}
+                  staggerDelay={150}
+                />
+              )}
+
+              {zoneLabels.map((zone, index) => (
+                <ZoneLabel
+                  key={zone.id}
+                  position={zone.position}
+                  type={zone.type}
+                  label={zone.label}
+                  visible={visibleOverlays.has('optimal') || visibleOverlays.has('exclusion')}
+                  animationDelay={index * 200}
+                />
+              ))}
             </>
           )}
         </DynamicMap>
@@ -682,7 +1158,9 @@ const validation = useConstraintsValidation({
         onClose={() => setIsAgentSidebarOpen(false)}
         onBack={handleBackToConstraints}
         onStop={handleStopAnalysis}
-        onComplete={handleViewPlan}
+        onSavePlan={handleSavePlan}
+        onStartOver={handleStartOver}
+        isSaving={isSavingPlan}
         onMapWidthChange={handleMapWidthChange}
         messages={agentMessages}
         currentPhase={currentPhase}

@@ -13,13 +13,13 @@ Use this document to track progress through the RALPH loop. Check off items as t
 | 3. Home Dashboard | 3 | 3 | ✅ Complete |
 | 4. Map & Area Select | 6 | 6 | ✅ Complete |
 | 5. Constraints | 5 | 5 | ✅ Complete |
-| 6. Agent Analysis | 6 | 0 | ⬜ Not Started |
+| 6. Agent Analysis | 6 | 4 | 🔄 In Progress |
 | 7. Overview | 5 | 0 | ⬜ Not Started |
 | 8. Analytics | 5 | 0 | ⬜ Not Started |
 | 9. Billing | 4 | 0 | ⬜ Not Started |
 | 10. Implementation | 5 | 0 | ⬜ Not Started |
 | 11. Polish | 6 | 0 | ⬜ Not Started |
-| **Total** | **55** | **24** | |
+| **Total** | **55** | **28** | |
 
 ---
 
@@ -874,23 +874,45 @@ Refactored to a modal "Prospecting Mode" approach:
 ---
 
 ### Task 6.4: Equipment Markers
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 
 **Subtasks:**
-- [ ] Create custom marker icons:
+- [x] Create custom marker icons:
   - Solar panel array (grouped)
   - Wind turbine
   - Battery storage
   - Inverter location
-- [ ] Style markers to match app theme
-- [ ] Add click handler to show tooltip/popup
-- [ ] Popup shows: type, capacity, estimated cost
-- [ ] Animate markers appearing on map
+  - Smart meter
+- [x] Style markers to match app theme
+- [x] Add click handler to show tooltip/popup
+- [x] Popup shows: type, model, capacity, quantity, orientation
+- [x] Animate markers appearing on map (staggered entrance)
+
+**Files Created:**
+- `components/map/markers/marker-icons.ts` - Custom SVG icon system with color-coded categories
+- `components/map/markers/equipment-marker.tsx` - Interactive marker with rich popup tooltips
+- `components/map/markers/polygon-vertex.tsx` - Improved polygon drawing vertices
+- `components/map/markers/zone-label.tsx` - Floating zone labels for optimal/exclusion areas
+- `components/map/markers/index.ts` - Barrel exports
+
+**Files Modified:**
+- `components/map/prospect-mode.tsx` - Updated to use improved vertex styling
+- `components/map/index.ts` - Added type exports for markers
+- `app/area-select/page.tsx` - Integrated equipment markers and zone labels during analysis
+- `app/globals.css` - Added custom styles for marker popups and zone labels
+
+**Implementation Details:**
+- Equipment icons: Solar (amber), Wind (blue), Storage (emerald), Infrastructure (gray)
+- Markers appear with 150ms staggered delay during "System Design" phase
+- Equipment varies based on user's selected technologies
+- Zone labels appear when optimal/exclusion overlays are visible
+- Hover effects with scale and shadow transitions
+- Rich popup tooltips with equipment details
 
 **Acceptance Criteria:**
-- [ ] Icons are clear and recognizable
-- [ ] Tooltips work on hover/click
-- [ ] Markers animate in
+- [x] Icons are clear and recognizable
+- [x] Tooltips work on hover/click
+- [x] Markers animate in
 
 ---
 

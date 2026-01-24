@@ -9,12 +9,18 @@ interface AgentMessageStreamProps {
   messages: AgentMessageData[];
   className?: string;
   autoScroll?: boolean;
+  summaryActions?: {
+    onSave?: () => void;
+    onStartOver?: () => void;
+    isSaving?: boolean;
+  };
 }
 
 export function AgentMessageStream({ 
   messages, 
   className,
-  autoScroll = true 
+  autoScroll = true,
+  summaryActions,
 }: AgentMessageStreamProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isUserScrolling = useRef(false);
@@ -30,19 +36,16 @@ export function AgentMessageStream({
     });
   }, []);
 
-  // Handle user scroll detection
   const handleScroll = useCallback(() => {
     if (!containerRef.current) return;
     
     const container = containerRef.current;
     const { scrollTop, scrollHeight, clientHeight } = container;
     
-    // Check if user is scrolling up
     if (scrollTop < lastScrollTop.current) {
       isUserScrolling.current = true;
     }
     
-    // Check if scrolled to bottom (with small threshold)
     const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
     if (isAtBottom) {
       isUserScrolling.current = false;
@@ -51,22 +54,34 @@ export function AgentMessageStream({
     lastScrollTop.current = scrollTop;
   }, []);
 
-  // Auto-scroll when new messages arrive
   useEffect(() => {
     if (autoScroll && messages.length > 0) {
-      // Use requestAnimationFrame to ensure DOM has updated
       requestAnimationFrame(() => {
         scrollToBottom();
       });
     }
   }, [messages.length, autoScroll, scrollToBottom]);
 
-  // Reset user scrolling state when messages clear
   useEffect(() => {
     if (messages.length === 0) {
       isUserScrolling.current = false;
     }
   }, [messages.length]);
+
+  const enhancedMessages = messages.map(message => {
+    if (message.type === 'summary' && message.summaryData && summaryActions) {
+      return {
+        ...message,
+        summaryData: {
+          ...message.summaryData,
+          onSave: summaryActions.onSave,
+          onStartOver: summaryActions.onStartOver,
+          isSaving: summaryActions.isSaving,
+        },
+      };
+    }
+    return message;
+  });
 
   return (
     <div
@@ -79,7 +94,7 @@ export function AgentMessageStream({
       )}
     >
       <AnimatePresence mode="popLayout">
-        {messages.map((message) => (
+        {enhancedMessages.map((message) => (
           <AgentMessage key={message.id} message={message} />
         ))}
       </AnimatePresence>

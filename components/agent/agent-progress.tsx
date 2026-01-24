@@ -84,14 +84,14 @@ export function AgentProgress({ currentPhase, className }: AgentProgressProps) {
               </motion.div>
               
               {index < ANALYSIS_PHASES.length - 2 && (
-                <div className="relative mx-1 h-0.5 w-6 overflow-hidden rounded-full bg-muted">
+                <div className="relative mx-1.5 h-0.5 w-8 overflow-hidden rounded-full bg-muted">
                   <motion.div
                     className="absolute inset-y-0 left-0 bg-primary"
                     initial={{ width: '0%' }}
                     animate={{ 
-                      width: isComplete ? '100%' : isCurrent ? '50%' : '0%' 
+                      width: isComplete ? '100%' : '0%' 
                     }}
-                    transition={{ duration: 0.3 }}
+                    transition={{ duration: 0.4, ease: 'easeOut' }}
                   />
                 </div>
               )}

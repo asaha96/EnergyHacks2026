@@ -54,6 +54,7 @@ export function FinalCTA() {
           <Button
             size="lg"
             className="h-14 px-10 text-lg shadow-xl shadow-primary/20 hover:scale-105 transition-all duration-300"
+            nativeButton={false}
             render={(props) => <Link {...props} href="/register" />}
           >
             Start Your Free Plan
