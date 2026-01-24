@@ -365,6 +365,91 @@ const [mapWidth, setMapWidth] = useState('100%');
 - **Leaflet map invalidation required**: After map container resize, call `map.invalidateSize()` after transition completes (~350ms delay) to ensure tiles render correctly
 - Sidebar has z-50, ensure map controls have lower z-index or adjust positioning
 
+#### AgentSidebar Pattern
+*From Task 6.1 - Date: Jan 24, 2026*
+
+**Files Created:**
+- `components/agent/agent-message.tsx` - Individual message component with icon/text/timestamp
+- `components/agent/agent-message-stream.tsx` - Auto-scrolling message container
+- `components/agent/agent-progress.tsx` - Phase progress indicator (5 analysis phases)
+- `components/agent/agent-sidebar.tsx` - Main sidebar with animated transition
+- `components/agent/index.ts` - Barrel exports
+
+**Message Types:**
+```tsx
+type AgentMessageType = 'loading' | 'success' | 'info' | 'error' | 'search' | 'processing' | 'analysis' | 'result';
+
+interface AgentMessageData {
+  id: string;
+  type: AgentMessageType;
+  text: string;
+  timestamp: Date;
+}
+```
+
+**Analysis Phases:**
+```tsx
+// Updated in Task 6.2 with proper phase names
+type AnalysisPhase = 
+  | 'data-collection'
+  | 'constraint-integration'
+  | 'technology-optimization'
+  | 'system-design'
+  | 'financial-modeling'
+  | 'complete';
+```
+
+**Usage in area-select page:**
+```tsx
+import { AgentSidebar, type AnalysisPhase, type AgentMessageData } from '@/components/agent';
+
+// State
+const [isAgentSidebarOpen, setIsAgentSidebarOpen] = useState(false);
+const [isAnalyzing, setIsAnalyzing] = useState(false);
+const [currentPhase, setCurrentPhase] = useState<AnalysisPhase>('data-collection');
+const [agentMessages, setAgentMessages] = useState<AgentMessageData[]>([]);
+
+// Helper to add messages
+const addAgentMessage = useCallback((type: AgentMessageType, text: string) => {
+  const message: AgentMessageData = {
+    id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    type,
+    text,
+    timestamp: new Date(),
+  };
+  setAgentMessages(prev => [...prev, message]);
+}, []);
+
+// Component
+<AgentSidebar
+  isOpen={isAgentSidebarOpen}
+  onClose={() => setIsAgentSidebarOpen(false)}
+  onBack={handleBackToConstraints}
+  onStop={handleStopAnalysis}
+  onComplete={handleViewPlan}
+  onMapWidthChange={handleMapWidthChange}
+  messages={agentMessages}
+  currentPhase={currentPhase}
+  isAnalyzing={isAnalyzing}
+/>
+```
+
+**Mode Switching Pattern:**
+- Constraints sidebar and Agent sidebar are mutually exclusive
+- When user clicks "Analyze", constraints closes, agent opens
+- Back button returns to constraints with reset state
+- Uses same `onMapWidthChange` pattern for map compression
+- Animation timing: 400ms delay between closing one and opening other
+
+**Auto-scroll Behavior:**
+- Container auto-scrolls to bottom on new messages
+- Detects manual scroll-up to pause auto-scroll
+- Resumes auto-scroll when user scrolls back to bottom
+
+**Gotchas:**
+- Use unique message IDs with timestamp + random suffix to prevent React key collisions
+- Relative time formatting updates on re-render only (not real-time clock)
+
 #### Technical Constraints Components
 *From Task 5.4*
 
@@ -804,7 +889,81 @@ useEffect(() => {
 
 1. 
 
+#### Map Overlay System
+*From Task 6.3 - Date: Jan 24, 2026*
+
+**Files Created:**
+- `components/map/overlays/analysis-overlays.tsx` - All overlay components
+- `components/map/overlays/index.ts` - Barrel exports
+
+**Overlay Types:**
+```tsx
+type OverlayType = 'terrain' | 'solar' | 'wind' | 'exclusion' | 'optimal';
+
+interface BaseOverlayProps {
+  polygon: PolygonCoordinates[];  // Array of {lat, lng} coordinates
+  visible: boolean;
+  onAnimationComplete?: () => void;
+}
+```
+
+**Overlay Colors:**
+- Terrain: greens → yellows → reds (elevation heat map)
+- Solar: `#fff7bc` → `#cc4c02` (yellow-orange gradient)
+- Wind: `#deebf7` → `#084594` (blue gradient)
+- Exclusion: `#e74c3c` (red with dashed border)
+- Optimal: `#27ae60` (green highlight)
+
+**Usage in area-select page:**
+```tsx
+import { TerrainOverlay, SolarOverlay, WindOverlay, ExclusionOverlay, OptimalOverlay, type OverlayType } from '@/components/map/overlays';
+
+// State
+const [visibleOverlays, setVisibleOverlays] = useState<Set<OverlayType>>(new Set());
+
+// Helpers
+const showOverlay = useCallback((overlay: OverlayType) => {
+  setVisibleOverlays(prev => new Set(prev).add(overlay));
+}, []);
+
+const hideOverlay = useCallback((overlay: OverlayType) => {
+  setVisibleOverlays(prev => {
+    const next = new Set(prev);
+    next.delete(overlay);
+    return next;
+  });
+}, []);
+
+const clearAllOverlays = useCallback(() => {
+  setVisibleOverlays(new Set());
+}, []);
+
+// In JSX inside DynamicMap children:
+{prospectedArea && (
+  <>
+    <TerrainOverlay polygon={prospectedArea} visible={visibleOverlays.has('terrain')} />
+    <SolarOverlay polygon={prospectedArea} visible={visibleOverlays.has('solar')} />
+    <WindOverlay polygon={prospectedArea} visible={visibleOverlays.has('wind')} />
+    <ExclusionOverlay polygon={prospectedArea} visible={visibleOverlays.has('exclusion')} />
+    <OptimalOverlay polygon={prospectedArea} visible={visibleOverlays.has('optimal')} />
+  </>
+)}
+```
+
+**Phase-to-Overlay Mapping:**
+- Data Collection → `terrain`
+- Constraint Integration → `exclusion`
+- Technology Optimization → `solar`, `wind`
+- System Design → clear clutter, show `optimal`
+
+**Gotchas:**
+- Overlays use `useMap()` hook from react-leaflet - must be rendered inside MapContainer
+- `PolygonCoordinates` is interface `{lat, lng}`, array is `PolygonCoordinates[]`
+- Use `L.LatLngTuple` type assertion: `polygon.map(p => [p.lat, p.lng] as L.LatLngTuple)`
+- Clean up layers on unmount with `map.removeLayer(layer)`
+- Stagger zone animations with `setTimeout(fn, index * 80)` for visual effect
+
 ---
 
 *Last Updated: Jan 24, 2026*
-*Last Task Completed: 5.5*
+*Last Task Completed: 6.3*
