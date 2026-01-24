@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useCallback, useState, useRef } from 'react';
-import { useMap, Polygon, useMapEvents, Circle } from 'react-leaflet';
+import { useMap, Polygon, useMapEvents, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 import { motion } from 'framer-motion';
 import { 
@@ -48,12 +48,18 @@ const PREVIEW_STYLE: L.PathOptions = {
   dashArray: '6, 6',
 };
 
-const VERTEX_STYLE = {
-  radius: 6,
-  color: 'oklch(0.60 0.13 163)',
+const VERTEX_STYLE_BASE = {
+  color: 'oklch(0.55 0.14 163)',
   fillColor: 'white',
   fillOpacity: 1,
-  weight: 2,
+  weight: 2.5,
+};
+
+const VERTEX_STYLE_FIRST = {
+  ...VERTEX_STYLE_BASE,
+  color: 'oklch(0.50 0.16 163)',
+  fillColor: 'oklch(0.92 0.04 163)',
+  weight: 3,
 };
 
 function MapInteractionController({ disabled }: { disabled: boolean }) {
@@ -249,13 +255,21 @@ export function ProspectMode({
         />
       )}
 
-      {points.map((point, index) => (
-        <Circle
-          key={`vertex-${index}`}
-          center={[point.lat, point.lng]}
-          {...VERTEX_STYLE}
-        />
-      ))}
+      {points.map((point, index) => {
+        const isFirst = index === 0;
+        const isLast = index === points.length - 1;
+        const style = isFirst ? VERTEX_STYLE_FIRST : VERTEX_STYLE_BASE;
+        const radius = isFirst ? 9 : isLast ? 8 : 7;
+        
+        return (
+          <CircleMarker
+            key={`vertex-${index}`}
+            center={[point.lat, point.lng]}
+            radius={radius}
+            pathOptions={style}
+          />
+        );
+      })}
 
       <div className="absolute inset-0 pointer-events-none z-[999]">
         <div className="absolute inset-x-0 top-0 h-1 bg-primary/50" />

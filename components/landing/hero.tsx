@@ -5,25 +5,26 @@ import { motion, useScroll, useTransform } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { Leaf, ArrowRight, ChevronDown } from "lucide-react"
-import { cn } from "@/lib/utils"
+
+function seededRandom(seed: number) {
+  const x = Math.sin(seed) * 10000
+  return x - Math.floor(x)
+}
+
+const GRID_POINTS = Array.from({ length: 20 }).map((_, i) => ({
+  id: i,
+  x: `${Math.round(seededRandom(i * 1.1) * 10000) / 100}%`,
+  y: `${Math.round(seededRandom(i * 2.2) * 10000) / 100}%`,
+  size: `${Math.round((seededRandom(i * 3.3) * 3 + 1) * 100) / 100}px`,
+  duration: Math.round(seededRandom(i * 4.4) * 2000 + 1000) / 100,
+  delay: Math.round(seededRandom(i * 5.5) * 500) / 100,
+}))
 
 export function Hero() {
   const { scrollY } = useScroll()
   const y1 = useTransform(scrollY, [0, 500], [0, 200])
   const y2 = useTransform(scrollY, [0, 500], [0, -150])
   const opacity = useTransform(scrollY, [0, 300], [1, 0])
-
-  // Generate grid points for the background
-  const gridPoints = React.useMemo(() => {
-    return Array.from({ length: 20 }).map((_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: Math.random() * 3 + 1,
-      duration: Math.random() * 20 + 10,
-      delay: Math.random() * 5,
-    }))
-  }, [])
 
   return (
     <section className="relative min-h-screen w-full flex flex-col items-center justify-center overflow-hidden bg-background">
@@ -33,13 +34,13 @@ export function Hero() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(var(--primary),0.05),transparent_70%)]" />
         
         {/* Animated Grid/Particles */}
-        {gridPoints.map((point) => (
+        {GRID_POINTS.map((point) => (
           <motion.div
             key={point.id}
             className="absolute rounded-full bg-primary/10"
             style={{
-              left: `${point.x}%`,
-              top: `${point.y}%`,
+              left: point.x,
+              top: point.y,
               width: point.size,
               height: point.size,
             }}
@@ -129,6 +130,7 @@ export function Hero() {
           <Button 
             size="lg" 
             className="h-12 px-8 text-base shadow-lg shadow-primary/20 transition-all hover:scale-105 hover:shadow-xl hover:shadow-primary/30"
+            nativeButton={false}
             render={(props) => <Link {...props} href="/register" />}
           >
             Start Planning
@@ -138,6 +140,7 @@ export function Hero() {
             variant="outline" 
             size="lg" 
             className="h-12 px-8 text-base backdrop-blur-sm transition-all hover:bg-primary/5"
+            nativeButton={false}
             render={(props) => <Link {...props} href="#learn-more" />}
           >
             Learn More
