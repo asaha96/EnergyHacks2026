@@ -13,13 +13,14 @@ Use this document to track progress through the RALPH loop. Check off items as t
 | 3. Home Dashboard | 3 | 3 | ✅ Complete |
 | 4. Map & Area Select | 6 | 6 | ✅ Complete |
 | 5. Constraints | 5 | 5 | ✅ Complete |
-| 6. Agent Analysis | 6 | 4 | 🔄 In Progress |
-| 7. Overview | 5 | 0 | ⬜ Not Started |
+| 6. Agent Analysis | 6 | 6 | ✅ Complete |
+| 7. Overview | 5 | 0 | 🔄 In Progress |
 | 8. Analytics | 5 | 0 | ⬜ Not Started |
 | 9. Billing | 4 | 0 | ⬜ Not Started |
 | 10. Implementation | 5 | 0 | ⬜ Not Started |
 | 11. Polish | 6 | 0 | ⬜ Not Started |
-| **Total** | **55** | **28** | |
+| **Total** | **55** | **30** | |
+
 
 ---
 

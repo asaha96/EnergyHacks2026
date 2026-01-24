@@ -44,12 +44,6 @@ export function FinancialConstraints({
 
       <div className="h-px bg-border/50 my-6" />
 
-      <div className="space-y-3">
-        <label className="text-sm font-medium text-foreground">How do you plan to pay?</label>
-        <FinancingOptions value={financing} onChange={onFinancingChange} />
-      </div>
-
-      <div className="h-px bg-border/50 my-6" />
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-foreground">What's more important to you?</label>

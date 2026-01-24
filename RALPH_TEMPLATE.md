@@ -39,7 +39,7 @@ You are an expert frontend engineer working on TerraWatt, a renewable energy pla
 - Name files in kebab-case, components in PascalCase
 
 ## Current Task
-Task ID: 6.5
+Task ID: 7.1
 ## Instructions
 
 1. Read the task requirements carefully

@@ -50,14 +50,6 @@ export function TechnicalConstraints({
 
       <div className="h-px bg-border/50 my-6" />
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground">
-          How important is visual appearance?
-        </label>
-        <AestheticSlider value={aestheticConcern} onChange={onAestheticConcernChange} />
-      </div>
-
-      <div className="h-px bg-border/50 my-6" />
 
       <div className="space-y-3">
         <label className="text-sm font-medium text-foreground">
