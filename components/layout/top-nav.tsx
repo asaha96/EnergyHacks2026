@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Leaf, LogOut, Settings, HelpCircle } from 'lucide-react';
-import { useAuthStore } from '@/stores/auth-store';
+import { useAuth } from '@/lib/auth0-provider';
 
 import {
   DropdownMenu,
@@ -15,7 +15,7 @@ import {
 
 export function TopNav() {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, logout } = useAuth();
   const userName = user?.name ?? 'Guest User';
   const userEmail = user?.email ?? 'guest@example.com';
   const userInitials = userName
@@ -25,16 +25,16 @@ export function TopNav() {
     .toUpperCase()
     .slice(0, 2);
 
-  function handleSignOut() {
-    logout();
-    router.push('/login');
+  async function handleSignOut() {
+    await logout();
+    router.push('/');
   }
 
   return (
     <header className="h-16 bg-background/80 backdrop-blur-md border-b border-border/40 sticky top-0 z-50">
       <div className="h-full px-6 flex items-center justify-between max-w-screen-2xl mx-auto">
-        <Link 
-          href="/home" 
+        <Link
+          href="/home"
           className="flex items-center gap-2.5 group"
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/20 transition-transform group-hover:scale-105">
@@ -67,8 +67,8 @@ export function TopNav() {
               <span>Help & Support</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem 
-              variant="destructive" 
+            <DropdownMenuItem
+              variant="destructive"
               onClick={handleSignOut}
               className="py-2.5 cursor-pointer"
             >
