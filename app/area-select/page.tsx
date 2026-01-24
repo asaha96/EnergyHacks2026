@@ -55,13 +55,13 @@ export default function AreaSelectPage() {
   const [prospectedArea, setProspectedArea] = useState<PolygonCoordinates[] | null>(null);
   const [locationName, setLocationName] = useState<string | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
-const [isConstraintsSidebarOpen, setIsConstraintsSidebarOpen] = useState(false);
+  const [isConstraintsSidebarOpen, setIsConstraintsSidebarOpen] = useState(false);
   const [isAgentSidebarOpen, setIsAgentSidebarOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentPhase, setCurrentPhase] = useState<AnalysisPhase>('data-collection');
   const [agentMessages, setAgentMessages] = useState<AgentMessageData[]>([]);
   const [mapWidth, setMapWidth] = useState('100%');
-  
+
   const [visibleOverlays, setVisibleOverlays] = useState<Set<OverlayType>>(new Set());
   const [equipmentPlacements, setEquipmentPlacements] = useState<EquipmentPlacement[]>([]);
   const [showEquipment, setShowEquipment] = useState(false);
@@ -214,7 +214,7 @@ const [isConstraintsSidebarOpen, setIsConstraintsSidebarOpen] = useState(false);
     });
   }, [updateDraftConstraints]);
 
-const validation = useConstraintsValidation({
+  const validation = useConstraintsValidation({
     budget,
     financing,
     primaryGoal,
@@ -225,9 +225,9 @@ const validation = useConstraintsValidation({
   });
 
   const addAgentMessage = useCallback((
-    type: AgentMessageType, 
-    text: string, 
-    options?: { 
+    type: AgentMessageType,
+    text: string,
+    options?: {
       status?: 'active' | 'completed';
       resolvedType?: AgentMessageType;
       detail?: string;
@@ -253,8 +253,8 @@ const validation = useConstraintsValidation({
     id: string,
     updates: Partial<Pick<AgentMessageData, 'status' | 'resolvedType' | 'text' | 'detail' | 'value'>>
   ) => {
-    setAgentMessages(prev => 
-      prev.map(msg => 
+    setAgentMessages(prev =>
+      prev.map(msg =>
         msg.id === id ? { ...msg, ...updates } : msg
       )
     );
@@ -458,11 +458,11 @@ const validation = useConstraintsValidation({
     ) => {
       const id = addAgentMessage(type, thinkingText, { status: 'active' });
       await delay(thinkDuration);
-      updateAgentMessage(id, { 
-        status: 'completed', 
+      updateAgentMessage(id, {
+        status: 'completed',
         text: completedText,
         resolvedType,
-        ...options 
+        ...options
       });
     };
 
@@ -498,8 +498,8 @@ const validation = useConstraintsValidation({
       { detail: 'Annual avg: 4.2 kWh/m²/day solar, 8.3 mph wind' }
     );
 
-    addAgentMessage('success', 'Data collection complete', { 
-      value: '3 data sources integrated' 
+    addAgentMessage('success', 'Data collection complete', {
+      value: '3 data sources integrated'
     });
 
     setCurrentPhase('constraint-integration');
@@ -588,7 +588,7 @@ const validation = useConstraintsValidation({
     );
 
     showOverlay('optimal');
-    
+
     if (prospectedArea) {
       const labels = generateZoneLabels(prospectedArea);
       setZoneLabels(labels);
@@ -606,7 +606,7 @@ const validation = useConstraintsValidation({
     addAgentMessage('info', '2 optimal zones identified for installation', {
       detail: 'Zone A: Primary array (35 kW) | Zone B: Secondary (10 kW)'
     });
-    
+
     if (prospectedArea) {
       const placements = generateEquipmentPlacements(prospectedArea);
       setEquipmentPlacements(placements);
@@ -658,17 +658,17 @@ const validation = useConstraintsValidation({
 
     setCurrentPhase('complete');
     await delay(300);
-    
+
     setIsAnalyzing(false);
   }, [addAgentMessage, updateAgentMessage, budget, primaryGoal, technologies, showOverlay, hideOverlay, clearAllOverlays, clearEquipment, prospectedArea, generateEquipmentPlacements, generateZoneLabels]);
 
   const summaryMessageRef = useRef<string | null>(null);
-  
+
   const addSummaryMessage = useCallback(() => {
     const avgBudget = (budget[0] + budget[1]) / 2;
     const id = `msg-summary-${Date.now()}`;
     summaryMessageRef.current = id;
-    
+
     const message: AgentMessageData = {
       id,
       type: 'summary',
@@ -691,11 +691,11 @@ const validation = useConstraintsValidation({
 
   const handleAnalyze = useCallback(() => {
     if (!validation.canProceed) return;
-    
+
     // Close constraints, open agent sidebar
     setIsConstraintsSidebarOpen(false);
     setIsAgentSidebarOpen(true);
-    
+
     // Start the analysis after a brief delay for animation
     setTimeout(() => {
       runAnalysis();
@@ -714,7 +714,7 @@ const validation = useConstraintsValidation({
     setCurrentPhase('data-collection');
     clearAllOverlays();
     clearEquipment();
-    
+
     setTimeout(() => {
       setIsConstraintsSidebarOpen(true);
     }, 350);
@@ -735,13 +735,13 @@ const validation = useConstraintsValidation({
 
   const handleSavePlan = useCallback(async () => {
     if (!prospectedArea) return;
-    
+
     setIsSavingPlan(true);
-    
+
     const analysisValues = getAnalysisValues();
     const centroid = calculateCentroid(prospectedArea);
     const areaData = calculateAreaWithUnits(prospectedArea);
-    
+
     const newPlan = {
       id: `plan-${Date.now()}`,
       userId: 'mock-user',
@@ -783,13 +783,13 @@ const validation = useConstraintsValidation({
         ],
       },
     };
-    
+
     await new Promise(resolve => setTimeout(resolve, 800));
-    
+
     addPlan(newPlan);
     setCurrentPlan(newPlan.id);
     setDraftArea(null);
-    
+
     setIsSavingPlan(false);
     router.push('/overview');
   }, [prospectedArea, getAnalysisValues, locationName, draftConstraints, equipmentPlacements, addPlan, setCurrentPlan, setDraftArea, router]);
@@ -888,7 +888,7 @@ const validation = useConstraintsValidation({
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1, width: mapWidth }}
-        transition={{ 
+        transition={{
           opacity: { duration: 0.5 },
           width: { type: 'spring', damping: 30, stiffness: 300 }
         }}
@@ -910,7 +910,7 @@ const validation = useConstraintsValidation({
                   />
                 )}
               </AnimatePresence>
-              
+
               <AnimatePresence>
                 {!isProspecting && (
                   <AddressSearch className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]" />
@@ -923,7 +923,7 @@ const validation = useConstraintsValidation({
                 onCancel={handleProspectCancel}
               />
 
-{!isProspecting && prospectedArea && (
+              {!isProspecting && prospectedArea && (
                 <CompletedPolygon coordinates={prospectedArea} />
               )}
 
@@ -992,7 +992,7 @@ const validation = useConstraintsValidation({
               >
                 <ArrowLeft className="h-5 w-5" />
               </Button>
-              
+
               <div className="flex items-center gap-2 bg-background/95 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg border border-border/50">
                 <Leaf className="h-5 w-5 text-primary" />
                 <span className="font-semibold text-foreground">TerraWatt</span>
@@ -1053,7 +1053,7 @@ const validation = useConstraintsValidation({
                     Area Selected
                   </span>
                 </div>
-                
+
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -1087,7 +1087,7 @@ const validation = useConstraintsValidation({
                 </div>
 
                 <div className="flex flex-col gap-2 pt-2">
-                  <Button 
+                  <Button
                     onClick={handleOpenConstraintsSidebar}
                     className="w-full gap-2"
                   >
@@ -1133,12 +1133,6 @@ const validation = useConstraintsValidation({
           onTargetProductionChange={handleTargetProductionChange}
           onGridConnectionChange={handleGridConnectionChange}
         />
-        <LandConstraints
-          existingStructures={existingStructures}
-          currentUse={currentUse}
-          onStructuresChange={handleStructuresChange}
-          onLandUseChange={handleLandUseChange}
-        />
         <TechnicalConstraints
           technologies={technologies}
           aestheticConcern={aestheticConcern}
@@ -1147,7 +1141,7 @@ const validation = useConstraintsValidation({
           onAestheticConcernChange={handleAestheticConcernChange}
           onMaintenanceCapacityChange={handleMaintenanceCapacityChange}
         />
-<TimelineConstraints
+        <TimelineConstraints
           timeline={timeline}
           onTimelineChange={handleTimelineChange}
         />
