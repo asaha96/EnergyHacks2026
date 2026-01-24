@@ -11,7 +11,7 @@ Use this document to track progress through the RALPH loop. Check off items as t
 | 1. Foundation | 5 | 5 | ✅ Complete |
 | 2. Landing & Auth | 5 | 5 | ✅ Complete |
 | 3. Home Dashboard | 3 | 3 | ✅ Complete |
-| 4. Map & Area Select | 6 | 1 | 🔄 In Progress |
+| 4. Map & Area Select | 6 | 2 | 🔄 In Progress |
 | 5. Constraints | 5 | 0 | ⬜ Not Started |
 | 6. Agent Analysis | 6 | 0 | ⬜ Not Started |
 | 7. Overview | 5 | 0 | ⬜ Not Started |
@@ -431,19 +431,30 @@ Use this document to track progress through the RALPH loop. Check off items as t
 ---
 
 ### Task 4.2: Map Controls
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 
 **Subtasks:**
-- [ ] Create custom zoom controls (styled buttons)
-- [ ] Add satellite/map style toggle
-- [ ] Add fullscreen toggle (optional)
-- [ ] Add "locate me" button (geolocation)
-- [ ] Position controls (bottom-left)
+- [x] Create custom zoom controls (styled buttons)
+- [x] Add satellite/map style toggle
+- [x] Add fullscreen toggle (optional)
+- [x] Add "locate me" button (geolocation)
+- [x] Position controls (bottom-left)
+
+**Files Created:**
+- `components/map/map-controls.tsx` - All map control components
+
+**Features Implemented:**
+- Zoom in/out buttons with connected styling
+- Locate me button with loading state and high-accuracy geolocation
+- Fullscreen toggle with enter/exit icons
+- Layer toggle with animated flyout menu (Map, Satellite, Terrain)
+- Dynamic tile layer switching without map re-render
+- Framer Motion animations for controls appearance
 
 **Acceptance Criteria:**
-- [ ] Zoom in/out works
-- [ ] Style toggle switches tile layer
-- [ ] Geolocation centers on user (with permission)
+- [x] Zoom in/out works
+- [x] Style toggle switches tile layer
+- [x] Geolocation centers on user (with permission)
 
 ---
 

@@ -31,6 +31,7 @@ interface DynamicMapProps {
   tileLayer?: 'positron' | 'satellite' | 'terrain';
   onMapReady?: (map: L.Map) => void;
   children?: React.ReactNode;
+  autoLocate?: boolean;
 }
 
 export function DynamicMap({
@@ -40,6 +41,7 @@ export function DynamicMap({
   tileLayer = 'positron',
   onMapReady,
   children,
+  autoLocate = false,
 }: DynamicMapProps) {
   return (
     <div className={cn('h-full w-full', className)}>
@@ -48,6 +50,7 @@ export function DynamicMap({
         zoom={zoom}
         tileLayer={tileLayer}
         onMapReady={onMapReady}
+        autoLocate={autoLocate}
       >
         {children}
       </MapContainerComponent>

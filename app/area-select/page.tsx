@@ -5,7 +5,7 @@ import L from 'leaflet';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Leaf } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { DynamicMap } from '@/components/map';
+import { DynamicMap, MapControls, type TileLayerType } from '@/components/map';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -13,10 +13,15 @@ export default function AreaSelectPage() {
   const router = useRouter();
   const mapRef = useRef<L.Map | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [tileLayer, setTileLayer] = useState<TileLayerType>('positron');
 
   const handleMapReady = useCallback((map: L.Map) => {
     mapRef.current = map;
     setIsMapReady(true);
+  }, []);
+
+  const handleTileLayerChange = useCallback((layer: TileLayerType) => {
+    setTileLayer(layer);
   }, []);
 
   return (
@@ -28,10 +33,17 @@ export default function AreaSelectPage() {
         className="absolute inset-0"
       >
         <DynamicMap
-          tileLayer="positron"
+          tileLayer={tileLayer}
           onMapReady={handleMapReady}
           className="h-full w-full"
-        />
+        >
+          {isMapReady && (
+            <MapControls
+              currentTileLayer={tileLayer}
+              onTileLayerChange={handleTileLayerChange}
+            />
+          )}
+        </DynamicMap>
       </motion.div>
 
       <motion.div

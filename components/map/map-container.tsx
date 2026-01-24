@@ -17,6 +17,7 @@ interface MapContainerProps {
   tileLayer?: TileLayerType;
   onMapReady?: (map: L.Map) => void;
   children?: React.ReactNode;
+  autoLocate?: boolean;
 }
 
 function MapReadyHandler({ onMapReady }: { onMapReady?: (map: L.Map) => void }) {
@@ -77,6 +78,18 @@ function useLeafletIconFix() {
   }, []);
 }
 
+function DynamicTileLayer({ tileLayer }: { tileLayer: TileLayerType }) {
+  const tile = TILE_LAYERS[tileLayer];
+  return (
+    <TileLayer
+      key={tileLayer}
+      url={tile.url}
+      attribution={tile.attribution}
+      maxZoom={19}
+    />
+  );
+}
+
 export function MapContainerComponent({
   center = DEFAULT_CENTER,
   zoom = DEFAULT_ZOOM,
@@ -84,9 +97,9 @@ export function MapContainerComponent({
   tileLayer = 'positron',
   onMapReady,
   children,
+  autoLocate = false,
 }: MapContainerProps) {
   const [mounted, setMounted] = useState(false);
-  const tile = TILE_LAYERS[tileLayer];
 
   useLeafletIconFix();
 
@@ -116,13 +129,9 @@ export function MapContainerComponent({
       touchZoom={true}
       dragging={true}
     >
-      <TileLayer
-        url={tile.url}
-        attribution={tile.attribution}
-        maxZoom={19}
-      />
+      <DynamicTileLayer tileLayer={tileLayer} />
       <MapReadyHandler onMapReady={onMapReady} />
-      <GeolocationHandler enabled={true} />
+      <GeolocationHandler enabled={autoLocate} />
       {children}
     </LeafletMapContainer>
   );
