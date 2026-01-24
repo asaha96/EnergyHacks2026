@@ -823,23 +823,29 @@ Refactored to a modal "Prospecting Mode" approach:
 ---
 
 ### Task 6.2: Phase Indicator
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 
 **Subtasks:**
-- [ ] Create phase progress component showing:
+- [x] Create phase progress component showing:
   1. Data Collection
   2. Constraint Integration
   3. Technology Optimization
   4. System Design
   5. Financial Modeling
-- [ ] Highlight current phase
-- [ ] Show completed phases with checkmark
-- [ ] Animate transitions between phases
+- [x] Highlight current phase
+- [x] Show completed phases with checkmark
+- [x] Animate transitions between phases
+
+**Implementation Notes:**
+- Updated `AnalysisPhase` type with new phase IDs
+- Updated `ANALYSIS_PHASES` array with proper labels and descriptions
+- Updated simulation messages to match phase context
+- Messages now use user's actual budget and primary goal
 
 **Acceptance Criteria:**
-- [ ] Current phase clearly visible
-- [ ] Completed phases marked
-- [ ] Smooth animations
+- [x] Current phase clearly visible
+- [x] Completed phases marked
+- [x] Smooth animations
 
 ---
 

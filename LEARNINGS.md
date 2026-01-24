@@ -389,7 +389,14 @@ interface AgentMessageData {
 
 **Analysis Phases:**
 ```tsx
-type AnalysisPhase = 'initializing' | 'terrain' | 'climate' | 'regulations' | 'optimization' | 'complete';
+// Updated in Task 6.2 with proper phase names
+type AnalysisPhase = 
+  | 'data-collection'
+  | 'constraint-integration'
+  | 'technology-optimization'
+  | 'system-design'
+  | 'financial-modeling'
+  | 'complete';
 ```
 
 **Usage in area-select page:**
@@ -399,7 +406,7 @@ import { AgentSidebar, type AnalysisPhase, type AgentMessageData } from '@/compo
 // State
 const [isAgentSidebarOpen, setIsAgentSidebarOpen] = useState(false);
 const [isAnalyzing, setIsAnalyzing] = useState(false);
-const [currentPhase, setCurrentPhase] = useState<AnalysisPhase>('initializing');
+const [currentPhase, setCurrentPhase] = useState<AnalysisPhase>('data-collection');
 const [agentMessages, setAgentMessages] = useState<AgentMessageData[]>([]);
 
 // Helper to add messages
@@ -885,4 +892,4 @@ useEffect(() => {
 ---
 
 *Last Updated: Jan 24, 2026*
-*Last Task Completed: 6.1*
+*Last Task Completed: 6.2*

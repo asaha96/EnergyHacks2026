@@ -5,11 +5,11 @@ import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type AnalysisPhase = 
-  | 'initializing'
-  | 'terrain'
-  | 'climate'
-  | 'regulations'
-  | 'optimization'
+  | 'data-collection'
+  | 'constraint-integration'
+  | 'technology-optimization'
+  | 'system-design'
+  | 'financial-modeling'
   | 'complete';
 
 export interface PhaseConfig {
@@ -19,11 +19,11 @@ export interface PhaseConfig {
 }
 
 export const ANALYSIS_PHASES: PhaseConfig[] = [
-  { id: 'initializing', label: 'Initializing', description: 'Starting analysis' },
-  { id: 'terrain', label: 'Terrain Analysis', description: 'Analyzing topography & soil' },
-  { id: 'climate', label: 'Climate Data', description: 'Fetching solar & wind data' },
-  { id: 'regulations', label: 'Regulations', description: 'Checking local permits' },
-  { id: 'optimization', label: 'Optimization', description: 'Computing optimal layout' },
+  { id: 'data-collection', label: 'Data Collection', description: 'Gathering terrain & climate data' },
+  { id: 'constraint-integration', label: 'Constraint Integration', description: 'Applying your requirements' },
+  { id: 'technology-optimization', label: 'Technology Optimization', description: 'Selecting optimal equipment' },
+  { id: 'system-design', label: 'System Design', description: 'Creating layout & placement' },
+  { id: 'financial-modeling', label: 'Financial Modeling', description: 'Calculating ROI & payback' },
   { id: 'complete', label: 'Complete', description: 'Analysis finished' },
 ];
 

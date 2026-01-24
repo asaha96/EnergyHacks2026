@@ -47,7 +47,7 @@ export default function AreaSelectPage() {
 const [isConstraintsSidebarOpen, setIsConstraintsSidebarOpen] = useState(false);
   const [isAgentSidebarOpen, setIsAgentSidebarOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [currentPhase, setCurrentPhase] = useState<AnalysisPhase>('initializing');
+  const [currentPhase, setCurrentPhase] = useState<AnalysisPhase>('data-collection');
   const [agentMessages, setAgentMessages] = useState<AgentMessageData[]>([]);
   const [mapWidth, setMapWidth] = useState('100%');
 
@@ -217,63 +217,77 @@ const validation = useConstraintsValidation({
   const runAnalysis = useCallback(async () => {
     setIsAnalyzing(true);
     setAgentMessages([]);
-    setCurrentPhase('initializing');
+    setCurrentPhase('data-collection');
 
-    // Phase 1: Initializing
+    // Phase 1: Data Collection
     addAgentMessage('info', 'Starting land analysis...');
     await new Promise(r => setTimeout(r, 800));
     addAgentMessage('loading', 'Loading satellite imagery for your selected area');
     await new Promise(r => setTimeout(r, 1200));
-    addAgentMessage('success', 'Satellite data loaded successfully');
-
-    // Phase 2: Terrain
-    setCurrentPhase('terrain');
-    await new Promise(r => setTimeout(r, 600));
     addAgentMessage('search', 'Analyzing terrain elevation and slope gradients');
-    await new Promise(r => setTimeout(r, 1500));
-    addAgentMessage('info', 'Identified 2 optimal flat zones for solar panel placement');
-    await new Promise(r => setTimeout(r, 800));
-    addAgentMessage('success', 'Terrain analysis complete - favorable conditions detected');
-
-    // Phase 3: Climate
-    setCurrentPhase('climate');
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 1000));
     addAgentMessage('loading', 'Fetching historical weather data from NOAA');
     await new Promise(r => setTimeout(r, 1400));
-    addAgentMessage('analysis', 'Computing solar irradiance patterns');
-    await new Promise(r => setTimeout(r, 1000));
-    addAgentMessage('info', 'Average annual solar exposure: 5.2 kWh/m²/day');
+    addAgentMessage('success', 'Data collection complete');
+
+    // Phase 2: Constraint Integration
+    setCurrentPhase('constraint-integration');
     await new Promise(r => setTimeout(r, 600));
-    addAgentMessage('success', 'Climate data analysis complete');
-
-    // Phase 4: Regulations
-    setCurrentPhase('regulations');
-    await new Promise(r => setTimeout(r, 500));
-    addAgentMessage('search', 'Checking local zoning regulations and permits');
-    await new Promise(r => setTimeout(r, 1200));
-    addAgentMessage('info', 'Agricultural zone - solar installations permitted');
-    await new Promise(r => setTimeout(r, 800));
-    addAgentMessage('loading', 'Verifying utility interconnection requirements');
+    addAgentMessage('processing', 'Applying your budget constraints');
     await new Promise(r => setTimeout(r, 1000));
-    addAgentMessage('success', 'Regulatory compliance verified');
+    addAgentMessage('info', `Budget range: $${budget[0].toLocaleString()} - $${budget[1].toLocaleString()}`);
+    await new Promise(r => setTimeout(r, 800));
+    addAgentMessage('processing', 'Integrating land usage requirements');
+    await new Promise(r => setTimeout(r, 1000));
+    addAgentMessage('info', `Primary goal: ${primaryGoal}`);
+    await new Promise(r => setTimeout(r, 600));
+    addAgentMessage('success', 'All constraints applied successfully');
 
-    // Phase 5: Optimization
-    setCurrentPhase('optimization');
+    // Phase 3: Technology Optimization
+    setCurrentPhase('technology-optimization');
     await new Promise(r => setTimeout(r, 500));
-    addAgentMessage('processing', 'Running optimization algorithms');
+    addAgentMessage('analysis', 'Evaluating solar panel configurations');
+    await new Promise(r => setTimeout(r, 1200));
+    addAgentMessage('info', 'Optimal panel: 400W monocrystalline bifacial');
+    await new Promise(r => setTimeout(r, 800));
+    addAgentMessage('analysis', 'Computing wind turbine potential');
+    await new Promise(r => setTimeout(r, 1000));
+    addAgentMessage('info', 'Average wind speed: 12 mph - suitable for micro turbines');
+    await new Promise(r => setTimeout(r, 600));
+    addAgentMessage('success', 'Technology selection complete');
+
+    // Phase 4: System Design
+    setCurrentPhase('system-design');
+    await new Promise(r => setTimeout(r, 500));
+    addAgentMessage('processing', 'Generating optimal equipment layout');
     await new Promise(r => setTimeout(r, 1500));
     addAgentMessage('analysis', 'Calculating optimal panel tilt angle: 32°');
     await new Promise(r => setTimeout(r, 1000));
+    addAgentMessage('info', 'Identified 2 optimal zones for solar array placement');
+    await new Promise(r => setTimeout(r, 800));
+    addAgentMessage('info', 'Estimated system capacity: 45 kW');
+    await new Promise(r => setTimeout(r, 600));
+    addAgentMessage('success', 'System design finalized');
+
+    // Phase 5: Financial Modeling
+    setCurrentPhase('financial-modeling');
+    await new Promise(r => setTimeout(r, 500));
+    addAgentMessage('loading', 'Calculating installation costs');
+    await new Promise(r => setTimeout(r, 1200));
+    addAgentMessage('analysis', 'Applying federal tax credits (30% ITC)');
+    await new Promise(r => setTimeout(r, 1000));
     addAgentMessage('info', 'Estimated annual production: 45,000 kWh');
     await new Promise(r => setTimeout(r, 800));
-    addAgentMessage('result', 'Financial projection: 7.2 year payback period');
+    addAgentMessage('result', 'Projected payback period: 7.2 years');
     await new Promise(r => setTimeout(r, 600));
+    addAgentMessage('result', '25-year savings: $127,500');
 
     // Complete
     setCurrentPhase('complete');
+    await new Promise(r => setTimeout(r, 400));
     addAgentMessage('success', 'Analysis complete! Your personalized energy plan is ready.');
     setIsAnalyzing(false);
-  }, [addAgentMessage]);
+  }, [addAgentMessage, budget, primaryGoal]);
 
   const handleAnalyze = useCallback(() => {
     if (!validation.canProceed) return;
@@ -297,7 +311,7 @@ const validation = useConstraintsValidation({
     setIsAgentSidebarOpen(false);
     setIsAnalyzing(false);
     setAgentMessages([]);
-    setCurrentPhase('initializing');
+    setCurrentPhase('data-collection');
     
     // Re-open constraints after animation
     setTimeout(() => {
