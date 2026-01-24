@@ -667,6 +667,9 @@ export default function AreaSelectPage() {
     setCurrentPhase('complete');
     await delay(300);
 
+    // AUTO-CONSENT: Analysis done, now ask for verification permission
+    setIsConsentModalOpen(true);
+
     setIsAnalyzing(false);
   }, [addAgentMessage, updateAgentMessage, budget, primaryGoal, technologies, showOverlay, hideOverlay, clearAllOverlays, clearEquipment, prospectedArea, generateEquipmentPlacements, generateZoneLabels]);
 
@@ -748,16 +751,10 @@ export default function AreaSelectPage() {
     };
   }, [budget]);
 
-  const handleSavePlan = useCallback(async (force = false) => {
+  const handleSavePlan = useCallback(async () => {
     if (!prospectedArea) return;
 
-    // --- LATE CONSENT CHECK ---
-    // If not yet consented and not forced, ask for permission now.
-    if (!hasAgentConsent && !force) {
-      setIsConsentModalOpen(true);
-      return;
-    }
-    // --------------------------
+    // Consent now triggers automatically after analysis, no check needed here
 
     setIsSavingPlan(true);
 
@@ -860,18 +857,51 @@ export default function AreaSelectPage() {
 
       await delay(800);
 
-      // 5. Proceed to Save
-      handleSavePlan(true); // authorized=true
+      // 5. Show Verified Summary
+      const avgBudget = (budget[0] + budget[1]) / 2;
+      const summaryId = `msg-summary-verified-${Date.now()}`;
+      const summaryMessage: AgentMessageData = {
+        id: summaryId,
+        type: 'summary',
+        text: 'Verified Energy Plan Summary',
+        timestamp: new Date(),
+        status: 'completed',
+        summaryData: {
+          systemSizeKw: 45,
+          annualProductionKwh: 58500, // optimized
+          totalCost: avgBudget,
+          netCost: Math.round(avgBudget * 0.7),
+          paybackYears: 5.2, // Improved from 6.8 due to optimization
+          annualSavings: Math.round(avgBudget / 5.2),
+          co2OffsetTons: 32.1, // Improved
+          isSaving: false,
+        },
+      };
+      // We need to add this manually since addAgentMessage is for text/thinking. 
+      // Actually we can use setAgentMessages to append it.
+      setAgentMessages(prev => [...prev, summaryMessage]);
+
+      await delay(800);
+
+      // 6. Ready for Manual Save
+      addAgentMessage('info', 'Verification Complete', {
+        detail: 'You can now save your certified plan.',
+        status: 'completed'
+      });
+
+      // Auto-save REMOVED to allow user review
+      // handleSavePlan(true); 
     };
 
     sequence();
-  }, [addAgentMessage, updateAgentMessage, handleSavePlan]);
+  }, [addAgentMessage, updateAgentMessage, budget]);
 
   const handleDenyAgent = useCallback(() => {
     setIsConsentModalOpen(false);
-    addAgentMessage('error', 'Verification skipped', { detail: 'Saving with estimated data' });
-    handleSavePlan(true); // Proceed without verification
-  }, [addAgentMessage, handleSavePlan]);
+    addAgentMessage('error', 'Verification skipped', { detail: 'Showing estimated plan' });
+    // Show unverified summary instead of auto-saving
+    addSummaryMessage();
+  }, [addAgentMessage, addSummaryMessage]);
 
   const handleStartOver = useCallback(() => {
     setVisibleOverlays(new Set());
@@ -917,11 +947,12 @@ export default function AreaSelectPage() {
       });
   }, [prospectedArea]);
 
-  useEffect(() => {
-    if (currentPhase === 'complete' && !isAnalyzing && !summaryMessageRef.current) {
-      addSummaryMessage();
-    }
-  }, [currentPhase, isAnalyzing, addSummaryMessage]);
+  // REMOVED: Summary now shown by consent handlers, not auto-triggered
+  // useEffect(() => {
+  //   if (currentPhase === 'complete' && !isAnalyzing && !summaryMessageRef.current) {
+  //     addSummaryMessage();
+  //   }
+  // }, [currentPhase, isAnalyzing, addSummaryMessage]);
 
   const handleMapReady = useCallback((map: L.Map) => {
     mapRef.current = map;
@@ -1231,7 +1262,7 @@ export default function AreaSelectPage() {
         onClose={() => setIsAgentSidebarOpen(false)}
         onBack={handleBackToConstraints}
         onStop={handleStopAnalysis}
-        onSavePlan={() => handleSavePlan(false)}
+        onSavePlan={() => handleSavePlan()}
         onStartOver={handleStartOver}
         isSaving={isSavingPlan}
         onMapWidthChange={handleMapWidthChange}

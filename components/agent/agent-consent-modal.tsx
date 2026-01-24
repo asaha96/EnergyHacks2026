@@ -52,12 +52,12 @@ export function AgentConsentModal({ isOpen, onAccept, onDeny, agentName = "Terra
                 className="w-full max-w-md bg-card border rounded-lg shadow-lg overflow-hidden"
             >
                 {/* Header */}
-                <div className="bg-zinc-900 px-6 py-6 text-center border-b border-white/10">
-                    <div className="mx-auto mb-4 h-12 w-12 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700">
-                        <Shield className="h-6 w-6 text-white" />
+                <div className="bg-primary px-6 py-6 text-center border-b border-primary-foreground/10">
+                    <div className="mx-auto mb-4 h-12 w-12 rounded-full bg-primary-foreground/20 flex items-center justify-center border border-primary-foreground/30">
+                        <Shield className="h-6 w-6 text-primary-foreground" />
                     </div>
-                    <h2 className="text-xl font-semibold text-white">Authorize Access</h2>
-                    <p className="text-sm text-zinc-400 mt-1">
+                    <h2 className="text-xl font-semibold text-primary-foreground">Authorize Access</h2>
+                    <p className="text-sm text-white mt-1">
                         <span className="font-medium text-white">{agentName}</span> is requesting access to your account.
                     </p>
                 </div>
