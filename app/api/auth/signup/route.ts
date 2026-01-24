@@ -36,6 +36,15 @@ export async function POST(request: NextRequest) {
             if (signupData.code === 'invalid_signup') {
                 let errorMessage = 'Invalid signup details';
 
+                const descString = typeof signupData.description === 'string' ? signupData.description : JSON.stringify(signupData.description || '');
+
+                if (descString.toLowerCase().includes('already exists')) {
+                    return NextResponse.json(
+                        { error: 'This account already exists' },
+                        { status: 409 }
+                    );
+                }
+
                 if (typeof signupData.description === 'string') {
                     errorMessage = signupData.description;
                 } else if (signupData.description && typeof signupData.description === 'object') {
@@ -50,7 +59,7 @@ export async function POST(request: NextRequest) {
                             errorMessage = JSON.stringify(signupData.description);
                         }
                     } catch (e) {
-                        errorMessage = 'Password does not meet complexity requirements.';
+                        errorMessage = 'Password requirements not met.';
                     }
                 } else if (signupData.message) {
                     errorMessage = signupData.message;
@@ -64,7 +73,7 @@ export async function POST(request: NextRequest) {
 
             if (signupData.code === 'user_exists') {
                 return NextResponse.json(
-                    { error: 'An account with this email already exists' },
+                    { error: 'This account already exists' },
                     { status: 409 }
                 );
             }
