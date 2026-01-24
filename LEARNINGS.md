@@ -1,0 +1,548 @@
+# TerraWatt Development Learnings
+
+This document captures learnings, decisions, gotchas, and discoveries made during the RALPH loop development process. Update this file after completing each task.
+
+---
+
+## How to Use This Document
+
+After completing each task:
+1. Add an entry under the relevant section
+2. Include the task ID, date, and description
+3. Note any decisions made and why
+4. Document gotchas or issues encountered
+5. Record any reusable patterns discovered
+
+When starting a new task:
+1. Search this document for relevant prior learnings
+2. Copy relevant sections into your RALPH prompt's "Previous Context" section
+
+---
+
+## Project Setup & Configuration
+
+### Task 1.1 - Project Setup
+*Date: Jan 24, 2026*
+
+**Decisions Made:**
+- [x] Folder structure: components/{layout,landing,auth,home,map,plan}, stores/, types/
+- [x] Package manager: npm
+- [x] Initial dependencies: framer-motion, zustand added to existing Next.js 16 + shadcn/ui stack
+
+**Tech Stack Versions:**
+- Next.js 16.1.4 (with Turbopack)
+- React 19.2.3
+- Tailwind CSS v4
+- shadcn/ui (base-vega style)
+- Framer Motion (latest)
+- Zustand (latest)
+
+**Gotchas:**
+- Next.js 16 auto-generates type validation files in `types/` directory (validator.ts, routes.d.ts, cache-life.d.ts). These should NOT be checked in and may cause build failures if stale. Delete them if build fails with type errors about missing modules.
+- shadcn/ui uses @base-ui/react primitives in base-vega style (not radix-ui)
+
+**Code Patterns:**
+- Path alias: `@/*` maps to project root
+- CSS variables defined in globals.css using OKLCH color space
+- Primary color is a forest green (oklch 0.60 0.13 163) 
+
+---
+
+### Task 1.2 - Theme Configuration
+*Date: [DATE]*
+
+**Color Tokens Defined:**
+```css
+/* Document the final color values here */
+--background: 
+--foreground: 
+--primary: 
+--primary-foreground: 
+--secondary: 
+--accent: 
+--muted: 
+--border: 
+/* etc */
+```
+
+**Decisions Made:**
+- 
+
+**Gotchas:**
+- 
+
+---
+
+## Component Patterns
+
+### Base Components
+
+#### AppShell
+*From Task 1.3*
+
+```tsx
+import { AppShell } from '@/components/layout';
+
+// Wrap authenticated pages
+<AppShell>
+  <YourPageContent />
+</AppShell>
+
+// Hide nav for fullscreen pages (e.g., map)
+<AppShell hideNav>
+  <FullscreenMap />
+</AppShell>
+```
+
+#### TopNav
+*From Task 1.3*
+
+- Logo links to `/`
+- Nav links (Dashboard, New Plan) hidden on mobile
+- User dropdown with Settings and Sign out
+- Uses base-ui Menu primitives (not radix)
+
+#### Sidebar
+*From Task 1.3*
+
+```tsx
+import { Sidebar } from '@/components/layout';
+
+<Sidebar
+  isOpen={isOpen}
+  onClose={() => setIsOpen(false)}
+  title="Constraints"
+  width="lg" // sm (320px), md (384px), lg (480px)
+>
+  <SidebarContent />
+</Sidebar>
+```
+
+**Animation Config:**
+- Type: Spring
+- Damping: 30
+- Stiffness: 300
+- Overlay: backdrop-blur-sm + black/20
+
+---
+
+### Auth Components
+*From Task 1.4*
+
+#### AuthLayout
+Split-screen layout for login/register pages:
+- Left side: Branded green background with animated icons, logo, quote
+- Right side: Form content area
+- Responsive: Stacks on mobile
+
+```tsx
+import { AuthLayout } from '@/components/auth';
+
+<AuthLayout quote="Your quote" author="Attribution">
+  <YourFormContent />
+</AuthLayout>
+```
+
+#### Auth Store (Mock)
+```tsx
+import { useAuthStore } from '@/stores/auth-store';
+
+const { user, isAuthenticated, login, logout } = useAuthStore();
+
+// Login sets default mock user
+login(); // or login({ name: 'Custom Name' })
+
+// Logout clears user
+logout();
+```
+
+#### Password Strength Indicator
+Register page includes a 5-bar password strength meter:
+- Checks: length >= 8, length >= 12, mixed case, digits, special chars
+- Visual: Colored bars (red → orange → yellow → green → emerald)
+
+---
+
+### Landing Components
+
+#### Hero Section
+*From Task 2.1*
+
+**Files Created:**
+- `components/landing/hero.tsx` - Full viewport hero with animated background
+- `components/landing/index.ts` - Barrel export
+
+```tsx
+import { Hero } from '@/components/landing';
+
+// In app/page.tsx
+<main>
+  <Hero />
+  <section id="learn-more">...</section>
+</main>
+```
+
+**Features:**
+- Full viewport height (min-h-screen)
+- Animated floating particles (20 dots, CSS/Framer Motion)
+- Gradient orbs with parallax scroll effect
+- Subtle grid pattern overlay (3% opacity)
+- Staggered entrance animations
+- Bouncing scroll indicator that fades on scroll
+
+**Animation Config:**
+- Background particles: 10-30s duration cycles
+- Hero content: 0.8s duration, staggered delays (0.1s, 0.2s, 0.3s)
+- Easing: [0.22, 1, 0.36, 1] (custom cubic bezier)
+- Scroll indicator: 2s bounce loop
+
+**Gotchas:**
+- **base-ui Button does NOT support `asChild` prop** like radix-ui. Use `render` prop instead:
+  ```tsx
+  // WRONG (radix pattern)
+  <Button asChild><Link href="/x">...</Link></Button>
+  
+  // CORRECT (base-ui pattern)
+  <Button render={(props) => <Link {...props} href="/x" />}>...</Button>
+  ```
+
+---
+
+#### Landing Page Sections
+*From Task 2.2*
+
+**Files Created:**
+- `components/landing/how-it-works.tsx` - 3-step process
+- `components/landing/stats-bar.tsx` - Animated number counters
+- `components/landing/testimonials.tsx` - Customer quotes grid
+- `components/landing/final-cta.tsx` - Closing CTA section
+- `components/landing/footer.tsx` - Site footer
+
+**Scroll Animation Pattern:**
+```tsx
+import { motion, useInView } from "framer-motion"
+
+function Section() {
+  const ref = React.useRef(null)
+  const isInView = useInView(ref, { once: true, amount: 0.3 })
+
+  return (
+    <section ref={ref}>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+        transition={{ duration: 0.6 }}
+      >
+        Content
+      </motion.div>
+    </section>
+  )
+}
+```
+
+**Animated Counter Pattern (stats-bar):**
+- Uses `useSpring` from framer-motion
+- Triggers on `useInView` becoming true
+- Spring config: `{ damping: 30, stiffness: 100 }`
+
+---
+
+#### Sidebar Pattern
+*From Task 5.1*
+
+```tsx
+// Document the sliding sidebar pattern here
+```
+
+**Animation Values:**
+- Duration: 
+- Easing: 
+- Width: 
+
+**Usage with Map Compression:**
+- 
+
+---
+
+### Map Components
+
+#### React Leaflet Setup
+*From Task 4.1*
+
+**Tile Provider Used:**
+- 
+
+**Custom Styling Applied:**
+- 
+
+**Gotchas:**
+- [ ] SSR issues with Leaflet
+- [ ] CSS import requirements
+- [ ] Window undefined handling
+
+**Working Configuration:**
+```tsx
+// Document the working map configuration
+```
+
+---
+
+#### Polygon Drawing
+*From Task 4.4*
+
+**Leaflet Draw Configuration:**
+```tsx
+// Document working draw configuration
+```
+
+**Event Handlers:**
+```tsx
+// Document the event handlers that work
+```
+
+**Gotchas:**
+- 
+
+---
+
+## State Management
+
+### Zustand Store Structure
+*Updated as stores are created*
+
+```tsx
+// Document the store structure here
+interface AppState {
+  // ...
+}
+```
+
+**Store Files:**
+- `stores/plan-store.ts` - 
+- `stores/map-store.ts` - 
+- `stores/ui-store.ts` - 
+
+---
+
+## Animation Patterns
+
+### Page Transitions
+*From various tasks*
+
+**Framer Motion Variants Used:**
+```tsx
+// Document reusable animation variants
+const slideInFromRight = {
+  initial: { },
+  animate: { },
+  exit: { },
+};
+```
+
+---
+
+### Micro-interactions
+*Collected from various tasks*
+
+| Element | Animation | Duration | Easing |
+|---------|-----------|----------|--------|
+| Button hover | | | |
+| Card hover | | | |
+| Sidebar open | | | |
+| Sidebar close | | | |
+| Map overlay fade | | | |
+
+---
+
+## API & Data
+
+### Mock Data Structures
+*From Task 1.5*
+
+**Sample Plans Location:** `lib/mock-data.ts`
+
+```tsx
+import { getSamplePlans } from '@/lib/mock-data';
+
+// Returns 3 sample plans with:
+// - Realistic Colorado addresses
+// - Complete financial projections
+// - Various statuses (draft, complete)
+const plans = getSamplePlans();
+```
+
+**Plan Store Initialization:**
+```tsx
+// In component, initialize sample data on mount
+const { initializeSampleData } = usePlanStore();
+
+useEffect(() => {
+  initializeSampleData(); // Only loads if store is empty
+}, [initializeSampleData]);
+```
+
+**Sample Equipment List:**
+```json
+{
+  // TODO: Add when implementing billing section
+}
+```
+
+---
+
+## Styling Decisions
+
+### Spacing System
+- 
+
+### Border Radius
+- Cards: 
+- Buttons: 
+- Inputs: 
+
+### Shadow Depths
+- Card: 
+- Elevated: 
+- Modal: 
+
+---
+
+## Third-Party Library Notes
+
+### shadcn/ui Customizations
+*Document any customizations to shadcn components*
+
+| Component | Customization | File Location |
+|-----------|--------------|---------------|
+| Button | | |
+| Card | | |
+| Input | | |
+| Dialog | | |
+
+---
+
+### React Leaflet
+*From Tasks 4.x*
+
+**Version Used:** 
+
+**Required Peer Dependencies:**
+- 
+
+**CSS Required:**
+```tsx
+// Document required CSS imports
+```
+
+**SSR Handling:**
+```tsx
+// Document dynamic import pattern
+```
+
+---
+
+### Framer Motion
+*From various tasks*
+
+**AnimatePresence Setup:**
+- 
+
+**Common Patterns:**
+- 
+
+---
+
+## Gotchas & Solutions
+
+### Issue: [Title]
+*Task: X.X | Date: [DATE]*
+
+**Problem:**
+> Describe the issue
+
+**Solution:**
+```tsx
+// Code solution
+```
+
+**Prevention:**
+> How to avoid this in the future
+
+---
+
+## Performance Notes
+
+### Bundle Size Observations
+*From Task 11.6*
+
+| Library | Size | Notes |
+|---------|------|-------|
+| react-leaflet | | |
+| framer-motion | | |
+| recharts | | |
+
+### Code Splitting Applied
+- 
+
+---
+
+## Accessibility Notes
+*From Task 11.5*
+
+### Keyboard Navigation
+- 
+
+### Screen Reader Considerations
+- 
+
+### Focus Management
+- 
+
+---
+
+## Testing Notes
+
+### Manual Test Checklist
+*Use for each major feature*
+
+- [ ] Works in Chrome
+- [ ] Works in Firefox
+- [ ] Works in Safari
+- [ ] Mobile responsive (375px)
+- [ ] Tablet responsive (768px)
+- [ ] Desktop (1440px+)
+- [ ] Animations smooth (60fps)
+- [ ] No console errors
+- [ ] Keyboard navigable
+
+---
+
+## Design Iterations
+
+### Visual Changes Log
+*Document any deviations from initial PRD design*
+
+| Date | Change | Reason |
+|------|--------|--------|
+| | | |
+
+---
+
+## Open Questions
+
+*Questions that need answers from stakeholders or future decisions*
+
+1. 
+
+---
+
+## Future Improvements
+
+*Ideas discovered during development that are out of scope but worth noting*
+
+1. 
+
+---
+
+*Last Updated: Jan 24, 2026*
+*Last Task Completed: 1.5*
