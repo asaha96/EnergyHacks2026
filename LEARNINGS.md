@@ -965,5 +965,66 @@ const clearAllOverlays = useCallback(() => {
 
 ---
 
+#### AnalyticsSidebar Pattern
+*From Task 8.1 - Date: Jan 24, 2026*
+
+**Files Created:**
+- `components/analytics/analytics-sidebar.tsx` - Main sidebar with tabs
+- `components/analytics/tabs/production-tab.tsx` - Production metrics
+- `components/analytics/tabs/financial-tab.tsx` - Financial projections
+- `components/analytics/tabs/environmental-tab.tsx` - Environmental impact
+- `components/analytics/tabs/comparison-tab.tsx` - Scenario comparisons
+- `components/analytics/index.ts` - Barrel exports
+
+**Tab Types:**
+```tsx
+type AnalyticsTab = 'production' | 'financial' | 'environmental' | 'comparison';
+```
+
+**Usage in Overview page:**
+```tsx
+import { AnalyticsSidebar } from '@/components/analytics';
+
+const [showAnalytics, setShowAnalytics] = useState(false);
+
+<SectionNavigation
+  onAnalyticsClick={() => setShowAnalytics(true)}
+  ...
+/>
+
+<AnalyticsSidebar
+  isOpen={showAnalytics}
+  onClose={() => setShowAnalytics(false)}
+  plan={plan}
+  defaultTab="production"
+/>
+```
+
+**Animation Config:**
+- Type: Spring
+- Damping: 30
+- Stiffness: 300
+- Width: 100% (mobile), 480px (sm), 560px (lg)
+
+**Features:**
+- Backdrop overlay with blur
+- Tab navigation with line variant from base-ui
+- Tab content transitions with Framer Motion
+- Escape key to close
+- Metrics cards with gradient icons
+- Placeholder charts for future implementation (Tasks 8.2-8.5)
+
+**Gotchas:**
+- **React Compiler strictness**: Avoid setting state in render phase or in effects. Use controlled state from parent when possible.
+- **Tab state reset**: Using `defaultTab` prop directly in initial useState; parent controls when sidebar opens.
+- **useMemo dependencies**: React Compiler requires explicit property access instead of object references. Extract properties before useMemo:
+  ```tsx
+  // Instead of: useMemo(() => { ... }, [plan?.financials])
+  const planFinancials = plan?.financials;
+  useMemo(() => { ... }, [planFinancials]);
+  ```
+
+---
+
 *Last Updated: Jan 24, 2026*
-*Last Task Completed: 6.3*
+*Last Task Completed: 8.1*
