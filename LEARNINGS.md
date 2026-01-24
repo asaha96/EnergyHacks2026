@@ -316,20 +316,174 @@ function filterAndSortPlans(
 
 ---
 
-#### Sidebar Pattern
-*From Task 5.1*
+#### ConstraintsSidebar Pattern
+*From Task 5.1 - Date: Jan 24, 2026*
+
+**Files Created:**
+- `components/constraints/constraints-sidebar.tsx` - Slide-in sidebar for constraints form
+- `components/constraints/index.ts` - Barrel export
 
 ```tsx
-// Document the sliding sidebar pattern here
+import { ConstraintsSidebar } from '@/components/constraints';
+
+// In page component
+const [isOpen, setIsOpen] = useState(false);
+const [mapWidth, setMapWidth] = useState('100%');
+
+<ConstraintsSidebar
+  isOpen={isOpen}
+  onClose={() => setIsOpen(false)}
+  onMapWidthChange={setMapWidth}
+>
+  {/* Constraint form sections go here */}
+</ConstraintsSidebar>
 ```
 
 **Animation Values:**
-- Duration: 
-- Easing: 
-- Width: 
+- Type: Spring
+- Damping: 30
+- Stiffness: 300
+- Width: 420px
+
+**Key Differences from Layout Sidebar:**
+- NO backdrop overlay (map remains interactive)
+- Compresses map via `onMapWidthChange` callback instead of overlaying
+- Fixed footer with "Analyze" button
 
 **Usage with Map Compression:**
-- 
+```tsx
+// Map container must animate its width to compress
+<motion.div
+  animate={{ width: mapWidth }}
+  transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+>
+  <Map />
+</motion.div>
+```
+
+**Gotchas:**
+- **Leaflet map invalidation required**: After map container resize, call `map.invalidateSize()` after transition completes (~350ms delay) to ensure tiles render correctly
+- Sidebar has z-50, ensure map controls have lower z-index or adjust positioning
+
+#### Technical Constraints Components
+*From Task 5.4*
+
+**TechnologySelect:**
+- 2x2 checkbox grid for Solar/Wind/Storage/Hydro
+- Uses existing Checkbox component with card-style labels
+- Icons: Sun, Wind, Battery, Droplets from lucide-react
+- Default: Solar pre-selected
+
+**AestheticSlider:**
+- Gradient track (stone→amber→rose) for visual concern spectrum
+- Dynamic labels: Not concerned / Somewhat important / Important / Very important
+- Uses same slider styling pattern as PaybackSlider
+
+**MaintenanceOptions:**
+- 3-column radio grid with sr-only radio buttons
+- Icons: Wrench (DIY), HeadphonesIcon (Full service), Puzzle (Mixed)
+- Centered layout with icon on top, labels below
+
+**TimelineOptions:**
+- 2x2 grid layout for urgency selection
+- Icons: Zap (ASAP), Calendar (This year), Clock (1-2 years), Search (Exploring)
+- Card-based radio selection pattern
+
+**Integration Pattern:**
+```tsx
+// Technical constraints state in area-select page
+const technologies: Technology[] = draftConstraints?.technical?.technologies ?? ['solar'];
+const aestheticConcern: number = draftConstraints?.technical?.aestheticConcern ?? 25;
+const maintenanceCapacity: MaintenanceCapacity = draftConstraints?.technical?.maintenanceCapacity ?? 'mixed';
+const timeline: Timeline = draftConstraints?.timeline ?? 'exploring';
+
+// Handlers update the full technical object to preserve other values
+const handleTechnologiesChange = useCallback((value: Technology[]) => {
+  updateDraftConstraints({
+    technical: { technologies: value, aestheticConcern, maintenanceCapacity },
+  });
+}, [aestheticConcern, maintenanceCapacity, updateDraftConstraints]);
+```
+
+#### Constraints Validation Pattern
+*From Task 5.5*
+
+**Validation Hook:**
+```tsx
+import { useConstraintsValidation } from '@/hooks/use-constraints-validation';
+
+const validation = useConstraintsValidation({
+  budget,
+  financing,
+  primaryGoal,
+  gridConnection,
+  currentUse,
+  technologies,
+  timeline,
+});
+
+// validation returns:
+// - sections: SectionValidation[] (id, label, isComplete, isRequired)
+// - completedCount: number
+// - requiredCount: number
+// - requiredCompletedCount: number
+// - isValid: boolean (all required sections complete)
+// - canProceed: boolean (same as isValid for now)
+```
+
+**Required vs Optional Sections:**
+- Required: Financial (financing !== 'undecided' OR budget < $500k), Energy (goal + grid), Technical (1+ tech)
+- Optional: Land Details, Timeline
+
+**Sidebar Footer Validation UI:**
+- Shows checkmark icon (green) when valid, alert icon (amber) when incomplete
+- "X of 5 sections complete" counter
+- "Complete required fields" warning when !canProceed
+- Button disabled with reduced opacity when !canProceed
+
+#### ConstraintSection Component
+*From Task 5.2*
+
+Reusable collapsible section for constraint forms:
+
+```tsx
+import { ConstraintSection } from '@/components/constraints';
+
+<ConstraintSection
+  title="Budget & Financing"
+  icon={<DollarSign className="h-4 w-4" />}
+  description="Set your price range and terms"
+  defaultOpen={true}
+  isComplete={isFormComplete}
+>
+  {/* Form content */}
+</ConstraintSection>
+```
+
+**Features:**
+- Uses base-ui Collapsible with Framer Motion height animation
+- Shows green checkmark badge when `isComplete=true`
+- Chevron rotates on expand/collapse
+- Border separator between sections
+
+#### Financial Constraints Components
+*From Task 5.2*
+
+**BudgetSlider:**
+- Dual-handle range slider ($10k-$500k+)
+- Uses existing shadcn Slider (supports multiple thumbs)
+- Formats as currency with tabular-nums for stable display
+- Values above $500k display as "$500k+"
+
+**FinancingOptions:**
+- Card-based radio group with icons and descriptions
+- Uses existing RadioGroup/RadioGroupItem
+- Selected state: primary border + subtle background tint
+
+**PaybackSlider:**
+- Gradient track (blue→green) for visual cost/ROI spectrum
+- Dynamic label: "Cost-focused" / "Balanced" / "ROI-focused"
+- Custom CSS to style inner track: `[&_[data-slot=slider-track]]:bg-gradient-to-r`
 
 ---
 
@@ -371,6 +525,45 @@ function filterAndSortPlans(
 
 **Gotchas:**
 - 
+
+---
+
+#### Area Calculator
+*From Task 4.5*
+
+**Files Created:**
+- `lib/geo.ts` - Geodesic area calculation utilities
+- `components/map/area-indicator.tsx` - Floating/inline area display component
+
+**Area Calculation:**
+```tsx
+import { calculateAreaWithUnits, formatArea } from '@/lib/geo';
+
+// Calculate area from polygon coordinates
+const area = calculateAreaWithUnits(coordinates);
+// Returns: { squareMeters, acres, hectares, squareFeet, squareMiles }
+
+// Format for display with smart unit selection
+formatArea(area.acres); // "12.5 acres", "0.45 acres", "8,500 sq ft"
+```
+
+**AreaIndicator Component:**
+```tsx
+import { AreaIndicator } from '@/components/map/area-indicator';
+
+// Floating variant (default) - for overlaying on map
+<AreaIndicator coordinates={points} variant="floating" />
+
+// Inline variant - for embedding in other UI
+<AreaIndicator coordinates={points} variant="inline" showIcon={false} />
+```
+
+**Integration Notes:**
+- Area updates in real-time as user draws (3+ points required)
+- Uses geodesic (spherical) calculation for accuracy on Earth's surface
+- Smart formatting: shows sq ft for small areas, acres for medium, sq mi for large
+- ProspectMode shows area in bottom panel during drawing
+- area-select page shows final area after polygon confirmation
 
 ---
 
@@ -614,4 +807,4 @@ useEffect(() => {
 ---
 
 *Last Updated: Jan 24, 2026*
-*Last Task Completed: 3.1*
+*Last Task Completed: 5.5*

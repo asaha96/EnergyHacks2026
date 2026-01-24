@@ -7,11 +7,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Leaf, Crosshair, Ruler, MapPin, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { DynamicMap, type TileLayerType, type PolygonCoordinates } from '@/components/map';
-import { ConstraintsSidebar, FinancialConstraints, EnergyConstraints, LandConstraints } from '@/components/constraints';
+import { ConstraintsSidebar, FinancialConstraints, EnergyConstraints, LandConstraints, TechnicalConstraints, TimelineConstraints } from '@/components/constraints';
 import { Button } from '@/components/ui/button';
 import { calculateAreaWithUnits, formatArea, calculateCentroid } from '@/lib/geo';
 import { usePlanStore } from '@/stores/plan-store';
-import type { FinancingType, EnergyGoal, GridConnection } from '@/types/plan';
+import { useConstraintsValidation } from '@/hooks/use-constraints-validation';
+import type { FinancingType, EnergyGoal, GridConnection, Technology, MaintenanceCapacity, Timeline } from '@/types/plan';
 
 const MapControls = dynamic(
   () => import('@/components/map/map-internals').then((mod) => mod.MapControls),
@@ -143,6 +144,63 @@ export default function AreaSelectPage() {
       },
     });
   }, [existingStructures, draftConstraints?.land?.exclusionZones, updateDraftConstraints]);
+
+  const technologies: Technology[] = draftConstraints?.technical?.technologies ?? ['solar'];
+  const aestheticConcern: number = draftConstraints?.technical?.aestheticConcern ?? 25;
+  const maintenanceCapacity: MaintenanceCapacity = draftConstraints?.technical?.maintenanceCapacity ?? 'mixed';
+
+  const handleTechnologiesChange = useCallback((value: Technology[]) => {
+    updateDraftConstraints({
+      technical: {
+        technologies: value,
+        aestheticConcern,
+        maintenanceCapacity,
+      },
+    });
+  }, [aestheticConcern, maintenanceCapacity, updateDraftConstraints]);
+
+  const handleAestheticConcernChange = useCallback((value: number) => {
+    updateDraftConstraints({
+      technical: {
+        technologies,
+        aestheticConcern: value,
+        maintenanceCapacity,
+      },
+    });
+  }, [technologies, maintenanceCapacity, updateDraftConstraints]);
+
+  const handleMaintenanceCapacityChange = useCallback((value: MaintenanceCapacity) => {
+    updateDraftConstraints({
+      technical: {
+        technologies,
+        aestheticConcern,
+        maintenanceCapacity: value,
+      },
+    });
+  }, [technologies, aestheticConcern, updateDraftConstraints]);
+
+  const timeline: Timeline = draftConstraints?.timeline ?? 'exploring';
+
+  const handleTimelineChange = useCallback((value: Timeline) => {
+    updateDraftConstraints({
+      timeline: value,
+    });
+  }, [updateDraftConstraints]);
+
+  const validation = useConstraintsValidation({
+    budget,
+    financing,
+    primaryGoal,
+    gridConnection,
+    currentUse,
+    technologies,
+    timeline,
+  });
+
+  const handleAnalyze = useCallback(() => {
+    if (!validation.canProceed) return;
+    router.push('/home');
+  }, [validation.canProceed, router]);
 
   useEffect(() => {
     if (!prospectedArea || prospectedArea.length < 3) {
@@ -400,6 +458,8 @@ export default function AreaSelectPage() {
         isOpen={isConstraintsSidebarOpen}
         onClose={handleCloseConstraintsSidebar}
         onMapWidthChange={handleMapWidthChange}
+        validation={validation}
+        onAnalyze={handleAnalyze}
       >
         <FinancialConstraints
           budget={budget}
@@ -423,6 +483,18 @@ export default function AreaSelectPage() {
           currentUse={currentUse}
           onStructuresChange={handleStructuresChange}
           onLandUseChange={handleLandUseChange}
+        />
+        <TechnicalConstraints
+          technologies={technologies}
+          aestheticConcern={aestheticConcern}
+          maintenanceCapacity={maintenanceCapacity}
+          onTechnologiesChange={handleTechnologiesChange}
+          onAestheticConcernChange={handleAestheticConcernChange}
+          onMaintenanceCapacityChange={handleMaintenanceCapacityChange}
+        />
+        <TimelineConstraints
+          timeline={timeline}
+          onTimelineChange={handleTimelineChange}
         />
       </ConstraintsSidebar>
     </div>

@@ -12,14 +12,14 @@ Use this document to track progress through the RALPH loop. Check off items as t
 | 2. Landing & Auth | 5 | 5 | ✅ Complete |
 | 3. Home Dashboard | 3 | 3 | ✅ Complete |
 | 4. Map & Area Select | 6 | 6 | ✅ Complete |
-| 5. Constraints | 5 | 3 | 🔄 In Progress |
+| 5. Constraints | 5 | 5 | ✅ Complete |
 | 6. Agent Analysis | 6 | 0 | ⬜ Not Started |
 | 7. Overview | 5 | 0 | ⬜ Not Started |
 | 8. Analytics | 5 | 0 | ⬜ Not Started |
 | 9. Billing | 4 | 0 | ⬜ Not Started |
 | 10. Implementation | 5 | 0 | ⬜ Not Started |
 | 11. Polish | 6 | 0 | ⬜ Not Started |
-| **Total** | **55** | **22** | |
+| **Total** | **55** | **24** | |
 
 ---
 
@@ -717,41 +717,78 @@ Refactored to a modal "Prospecting Mode" approach:
 ---
 
 ### Task 5.4: Technical & Timeline Constraints
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 
 **Subtasks:**
-- [ ] Create "Technology Preferences" section:
+- [x] Create "Technology Preferences" section:
   - Technology checkboxes (Solar ✓, Wind, Battery Storage, Micro-hydro)
   - Aesthetic concern slider (Not concerned ↔ Very important)
   - Maintenance capacity radio (DIY, Full service, Mixed)
-- [ ] Create "Timeline" section:
+- [x] Create "Timeline" section:
   - Urgency radio (ASAP, This year, 1-2 years, Just exploring)
 
+**Files Created:**
+- `components/constraints/technology-select.tsx` - 2x2 checkbox grid with icons
+- `components/constraints/aesthetic-slider.tsx` - Gradient slider for visual concern
+- `components/constraints/maintenance-options.tsx` - 3-column radio with icons
+- `components/constraints/technical-constraints.tsx` - Combined section component
+- `components/constraints/timeline-options.tsx` - 2x2 radio grid with icons
+- `components/constraints/timeline-constraints.tsx` - Combined timeline section
+
+**Files Modified:**
+- `components/constraints/index.ts` - Added all new exports
+- `app/area-select/page.tsx` - Integrated with state management via Zustand
+
+**Implementation Details:**
+- TechnologySelect: 2x2 grid with Sun/Wind/Battery/Droplets icons, checkboxes
+- AestheticSlider: Gradient (stone→amber→rose), dynamic labels (Not concerned/Somewhat/Important/Very important)
+- MaintenanceOptions: 3-column radio with Wrench/Headphones/Puzzle icons
+- TimelineOptions: 2x2 grid with Zap/Calendar/Clock/Search icons
+- Default: Solar selected, 25% aesthetic concern, mixed maintenance, exploring timeline
+- Validation: Warning shown if no technology selected
+
 **Acceptance Criteria:**
-- [ ] All inputs functional
-- [ ] At least one technology must be selected
-- [ ] Values stored in state
+- [x] All inputs functional
+- [x] At least one technology must be selected (with validation message)
+- [x] Values stored in state
 
 ---
 
 ### Task 5.5: Constraints Validation
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 
 **Subtasks:**
-- [ ] Add validation indicators per section (check mark when complete)
-- [ ] Highlight required fields
-- [ ] Disable "Analyze" button until minimum fields complete:
-  - Budget range set
+- [x] Add validation indicators per section (check mark when complete)
+- [x] Highlight required fields
+- [x] Disable "Analyze" button until minimum fields complete:
+  - Budget range set (or financing selected)
   - At least one technology selected
   - Primary goal selected
-- [ ] Show inline validation messages
-- [ ] Add "Analyze My Land" button at bottom (fixed position)
+  - Grid connection selected
+- [x] Show inline validation messages
+- [x] Add "Analyze My Land" button at bottom (fixed position)
+
+**Files Created:**
+- `hooks/use-constraints-validation.ts` - Validation hook with section-level tracking
+
+**Files Modified:**
+- `components/constraints/constraints-sidebar.tsx` - Added validation summary and conditional button state
+- `app/area-select/page.tsx` - Integrated validation hook and analyze handler
+
+**Implementation Details:**
+- Validation hook returns: sections array, completedCount, requiredCount, isValid, canProceed
+- Required sections: Financial (budget/financing), Energy (goal + grid), Technical (1+ tech)
+- Optional sections: Land Details, Timeline
+- Footer shows: checkmark/warning icon, "X of 5 sections complete", warning text if incomplete
+- Button: disabled with opacity when !canProceed, enabled with primary color when valid
+- Button text: "Analyze My Land" with Sparkles icon
+- Currently navigates to /home (will connect to agent phase in Phase 6)
 
 **Acceptance Criteria:**
-- [ ] Visual feedback on completion
-- [ ] Cannot proceed without required fields
-- [ ] Clear error messages
-- [ ] Button click triggers agent phase
+- [x] Visual feedback on completion (checkmarks per section, footer indicator)
+- [x] Cannot proceed without required fields (button disabled)
+- [x] Clear error messages ("Complete required fields" in footer)
+- [x] Button click triggers agent phase (placeholder: navigates to /home)
 
 ---
 

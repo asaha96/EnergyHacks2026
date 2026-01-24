@@ -3,7 +3,7 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { useMap, Polygon, useMapEvents, Circle } from 'react-leaflet';
 import L from 'leaflet';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
   Crosshair, 
   Pentagon, 
@@ -12,10 +12,12 @@ import {
   Trash2, 
   Check,
   X,
-  MapPin
+  MapPin,
+  Ruler
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { calculateAreaWithUnits, formatArea } from '@/lib/geo';
 
 export interface PolygonCoordinates {
   lat: number;
@@ -95,14 +97,11 @@ function DrawingHandler({ tool, points, setPoints, onComplete }: DrawingHandlerP
     
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
-      if (tool === 'polygon' && points.length >= 3) {
-        onComplete();
-      }
     };
 
     container.addEventListener('contextmenu', handleContextMenu);
     return () => container.removeEventListener('contextmenu', handleContextMenu);
-  }, [map, tool, points.length, onComplete]);
+  }, [map]);
 
   useMapEvents({
     click(e) {
@@ -175,6 +174,10 @@ export function ProspectMode({
   const [tool, setTool] = useState<ProspectTool>('polygon');
   const [points, setPoints] = useState<PolygonCoordinates[]>([]);
   const canComplete = tool === 'polygon' ? points.length >= 3 : points.length === 4;
+
+  const areaDisplay = points.length >= 3 
+    ? formatArea(calculateAreaWithUnits(points).acres)
+    : null;
 
   const handleUndo = useCallback(() => {
     if (tool === 'polygon') {
@@ -347,22 +350,36 @@ export function ProspectMode({
       >
         <div className="bg-background/95 backdrop-blur-sm rounded-2xl shadow-lg border border-border/50 px-6 py-4">
           <div className="flex flex-col items-center gap-3">
-            <div className="flex items-center gap-2 text-sm">
-              <MapPin className="h-4 w-4 text-primary" />
-              <span className="text-muted-foreground">
-                {tool === 'polygon' ? (
-                  points.length === 0 
-                    ? 'Click on the map to start outlining your property'
-                    : points.length < 3
-                      ? `${3 - points.length} more point${3 - points.length > 1 ? 's' : ''} needed`
-                      : `${points.length} points - click more or confirm`
-                ) : (
-                  points.length === 0
-                    ? 'Click and drag to draw a rectangle'
-                    : 'Release to confirm rectangle'
-                )}
-              </span>
-            </div>
+            {areaDisplay ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex items-center gap-3 px-4 py-2 bg-primary/10 rounded-full"
+              >
+                <Ruler className="h-4 w-4 text-primary" />
+                <motion.span
+                  key={areaDisplay}
+                  initial={{ opacity: 0.5 }}
+                  animate={{ opacity: 1 }}
+                  className="text-lg font-bold text-foreground"
+                >
+                  {areaDisplay}
+                </motion.span>
+              </motion.div>
+            ) : (
+              <div className="flex items-center gap-2 text-sm">
+                <MapPin className="h-4 w-4 text-primary" />
+                <span className="text-muted-foreground">
+                  {tool === 'polygon' ? (
+                    points.length === 0 
+                      ? 'Click on the map to start outlining your property'
+                      : `${3 - points.length} more point${3 - points.length > 1 ? 's' : ''} needed`
+                  ) : (
+                    'Click and drag to draw a rectangle'
+                  )}
+                </span>
+              </div>
+            )}
 
             <div className="flex items-center gap-2">
               <Button
@@ -389,7 +406,6 @@ export function ProspectMode({
             <p className="text-xs text-muted-foreground">
               {canComplete ? (
                 <>
-                  <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">Right-click</kbd> or{' '}
                   <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">Enter</kbd> to confirm
                 </>
               ) : (

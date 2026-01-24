@@ -2,14 +2,17 @@
 
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
+import { X, Sparkles, Check, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import type { ConstraintsValidation } from '@/hooks/use-constraints-validation';
 
 interface ConstraintsSidebarProps {
   isOpen: boolean;
   onClose: () => void;
   onMapWidthChange?: (width: string) => void;
+  onAnalyze?: () => void;
+  validation?: ConstraintsValidation;
   children?: React.ReactNode;
 }
 
@@ -18,8 +21,13 @@ export function ConstraintsSidebar({
   isOpen,
   onClose,
   onMapWidthChange,
+  onAnalyze,
+  validation,
   children,
 }: ConstraintsSidebarProps) {
+  const canProceed = validation?.canProceed ?? false;
+  const completedCount = validation?.completedCount ?? 0;
+  const totalSections = validation?.sections.length ?? 5;
   useEffect(() => {
     if (isOpen) {
       onMapWidthChange?.('calc(100% - 420px)');
@@ -86,13 +94,39 @@ export function ConstraintsSidebar({
             )}
           </div>
 
-          <footer className="shrink-0 border-t border-border bg-background/95 p-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <footer className="shrink-0 border-t border-border bg-background/95 px-6 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {canProceed ? (
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10">
+                    <Check className="h-3 w-3 text-primary" />
+                  </div>
+                ) : (
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/10">
+                    <AlertCircle className="h-3 w-3 text-amber-500" />
+                  </div>
+                )}
+                <span className="text-xs text-muted-foreground">
+                  {completedCount} of {totalSections} sections complete
+                </span>
+              </div>
+              {validation && !canProceed && (
+                <span className="text-xs text-amber-600 dark:text-amber-400">
+                  Complete required fields
+                </span>
+              )}
+            </div>
             <Button
-              className="w-full shadow-sm transition-all duration-300 disabled:opacity-50"
+              className={cn(
+                "w-full gap-2 shadow-sm transition-all duration-300",
+                canProceed && "bg-primary hover:bg-primary/90"
+              )}
               size="lg"
-              disabled={true}
+              disabled={!canProceed}
+              onClick={onAnalyze}
             >
-              Analyze
+              <Sparkles className="h-4 w-4" />
+              Analyze My Land
             </Button>
           </footer>
         </motion.aside>
