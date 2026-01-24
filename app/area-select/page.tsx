@@ -8,6 +8,7 @@ import { ArrowLeft, Leaf, Crosshair, Ruler, MapPin, Sparkles } from 'lucide-reac
 import { useRouter } from 'next/navigation';
 import { DynamicMap, type TileLayerType, type PolygonCoordinates } from '@/components/map';
 import { ConstraintsSidebar, FinancialConstraints, EnergyConstraints, LandConstraints, TechnicalConstraints, TimelineConstraints } from '@/components/constraints';
+import { AgentSidebar, type AnalysisPhase, type AgentMessageData, type AgentMessageType } from '@/components/agent';
 import { Button } from '@/components/ui/button';
 import { calculateAreaWithUnits, formatArea, calculateCentroid } from '@/lib/geo';
 import { usePlanStore } from '@/stores/plan-store';
@@ -43,7 +44,11 @@ export default function AreaSelectPage() {
   const [prospectedArea, setProspectedArea] = useState<PolygonCoordinates[] | null>(null);
   const [locationName, setLocationName] = useState<string | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
-  const [isConstraintsSidebarOpen, setIsConstraintsSidebarOpen] = useState(false);
+const [isConstraintsSidebarOpen, setIsConstraintsSidebarOpen] = useState(false);
+  const [isAgentSidebarOpen, setIsAgentSidebarOpen] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [currentPhase, setCurrentPhase] = useState<AnalysisPhase>('initializing');
+  const [agentMessages, setAgentMessages] = useState<AgentMessageData[]>([]);
   const [mapWidth, setMapWidth] = useState('100%');
 
   const { draftConstraints, updateDraftConstraints } = usePlanStore();
@@ -187,7 +192,7 @@ export default function AreaSelectPage() {
     });
   }, [updateDraftConstraints]);
 
-  const validation = useConstraintsValidation({
+const validation = useConstraintsValidation({
     budget,
     financing,
     primaryGoal,
@@ -197,10 +202,112 @@ export default function AreaSelectPage() {
     timeline,
   });
 
+  // Helper to add agent messages
+  const addAgentMessage = useCallback((type: AgentMessageType, text: string) => {
+    const message: AgentMessageData = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      text,
+      timestamp: new Date(),
+    };
+    setAgentMessages(prev => [...prev, message]);
+  }, []);
+
+  // Simulated analysis phases
+  const runAnalysis = useCallback(async () => {
+    setIsAnalyzing(true);
+    setAgentMessages([]);
+    setCurrentPhase('initializing');
+
+    // Phase 1: Initializing
+    addAgentMessage('info', 'Starting land analysis...');
+    await new Promise(r => setTimeout(r, 800));
+    addAgentMessage('loading', 'Loading satellite imagery for your selected area');
+    await new Promise(r => setTimeout(r, 1200));
+    addAgentMessage('success', 'Satellite data loaded successfully');
+
+    // Phase 2: Terrain
+    setCurrentPhase('terrain');
+    await new Promise(r => setTimeout(r, 600));
+    addAgentMessage('search', 'Analyzing terrain elevation and slope gradients');
+    await new Promise(r => setTimeout(r, 1500));
+    addAgentMessage('info', 'Identified 2 optimal flat zones for solar panel placement');
+    await new Promise(r => setTimeout(r, 800));
+    addAgentMessage('success', 'Terrain analysis complete - favorable conditions detected');
+
+    // Phase 3: Climate
+    setCurrentPhase('climate');
+    await new Promise(r => setTimeout(r, 600));
+    addAgentMessage('loading', 'Fetching historical weather data from NOAA');
+    await new Promise(r => setTimeout(r, 1400));
+    addAgentMessage('analysis', 'Computing solar irradiance patterns');
+    await new Promise(r => setTimeout(r, 1000));
+    addAgentMessage('info', 'Average annual solar exposure: 5.2 kWh/m²/day');
+    await new Promise(r => setTimeout(r, 600));
+    addAgentMessage('success', 'Climate data analysis complete');
+
+    // Phase 4: Regulations
+    setCurrentPhase('regulations');
+    await new Promise(r => setTimeout(r, 500));
+    addAgentMessage('search', 'Checking local zoning regulations and permits');
+    await new Promise(r => setTimeout(r, 1200));
+    addAgentMessage('info', 'Agricultural zone - solar installations permitted');
+    await new Promise(r => setTimeout(r, 800));
+    addAgentMessage('loading', 'Verifying utility interconnection requirements');
+    await new Promise(r => setTimeout(r, 1000));
+    addAgentMessage('success', 'Regulatory compliance verified');
+
+    // Phase 5: Optimization
+    setCurrentPhase('optimization');
+    await new Promise(r => setTimeout(r, 500));
+    addAgentMessage('processing', 'Running optimization algorithms');
+    await new Promise(r => setTimeout(r, 1500));
+    addAgentMessage('analysis', 'Calculating optimal panel tilt angle: 32°');
+    await new Promise(r => setTimeout(r, 1000));
+    addAgentMessage('info', 'Estimated annual production: 45,000 kWh');
+    await new Promise(r => setTimeout(r, 800));
+    addAgentMessage('result', 'Financial projection: 7.2 year payback period');
+    await new Promise(r => setTimeout(r, 600));
+
+    // Complete
+    setCurrentPhase('complete');
+    addAgentMessage('success', 'Analysis complete! Your personalized energy plan is ready.');
+    setIsAnalyzing(false);
+  }, [addAgentMessage]);
+
   const handleAnalyze = useCallback(() => {
     if (!validation.canProceed) return;
-    router.push('/home');
-  }, [validation.canProceed, router]);
+    
+    // Close constraints, open agent sidebar
+    setIsConstraintsSidebarOpen(false);
+    setIsAgentSidebarOpen(true);
+    
+    // Start the analysis after a brief delay for animation
+    setTimeout(() => {
+      runAnalysis();
+    }, 400);
+  }, [validation.canProceed, runAnalysis]);
+
+  const handleStopAnalysis = useCallback(() => {
+    setIsAnalyzing(false);
+    addAgentMessage('error', 'Analysis stopped by user');
+  }, [addAgentMessage]);
+
+  const handleBackToConstraints = useCallback(() => {
+    setIsAgentSidebarOpen(false);
+    setIsAnalyzing(false);
+    setAgentMessages([]);
+    setCurrentPhase('initializing');
+    
+    // Re-open constraints after animation
+    setTimeout(() => {
+      setIsConstraintsSidebarOpen(true);
+    }, 350);
+  }, []);
+
+  const handleViewPlan = useCallback(() => {
+    router.push('/overview');
+  }, [router]);
 
   useEffect(() => {
     if (!prospectedArea || prospectedArea.length < 3) {
@@ -492,11 +599,23 @@ export default function AreaSelectPage() {
           onAestheticConcernChange={handleAestheticConcernChange}
           onMaintenanceCapacityChange={handleMaintenanceCapacityChange}
         />
-        <TimelineConstraints
+<TimelineConstraints
           timeline={timeline}
           onTimelineChange={handleTimelineChange}
         />
       </ConstraintsSidebar>
+
+      <AgentSidebar
+        isOpen={isAgentSidebarOpen}
+        onClose={() => setIsAgentSidebarOpen(false)}
+        onBack={handleBackToConstraints}
+        onStop={handleStopAnalysis}
+        onComplete={handleViewPlan}
+        onMapWidthChange={handleMapWidthChange}
+        messages={agentMessages}
+        currentPhase={currentPhase}
+        isAnalyzing={isAnalyzing}
+      />
     </div>
   );
 }

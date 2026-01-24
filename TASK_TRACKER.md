@@ -795,23 +795,30 @@ Refactored to a modal "Prospecting Mode" approach:
 ## Phase 6: Agent Analysis
 
 ### Task 6.1: Agent Sidebar UI
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 
 **Subtasks:**
-- [ ] Transform constraints sidebar into agent sidebar (animated transition)
-- [ ] Create message stream container
-- [ ] Create individual message component:
+- [x] Transform constraints sidebar into agent sidebar (animated transition)
+- [x] Create message stream container
+- [x] Create individual message component:
   - Icon (varies by type: loading, check, info)
   - Text content
   - Timestamp (optional)
-- [ ] Auto-scroll to latest message
-- [ ] Add overall progress indicator at top
+- [x] Auto-scroll to latest message
+- [x] Add overall progress indicator at top
+
+**Files Created:**
+- `components/agent/agent-message.tsx` - Message component with icon/text/timestamp
+- `components/agent/agent-message-stream.tsx` - Auto-scrolling message container
+- `components/agent/agent-progress.tsx` - 5-phase progress indicator
+- `components/agent/agent-sidebar.tsx` - Main sidebar with animated transition
+- `components/agent/index.ts` - Barrel exports
 
 **Acceptance Criteria:**
-- [ ] Transition from constraints is smooth
-- [ ] Messages appear with animation
-- [ ] Auto-scrolls as new messages arrive
-- [ ] Progress shows current phase
+- [x] Transition from constraints is smooth
+- [x] Messages appear with animation
+- [x] Auto-scrolls as new messages arrive
+- [x] Progress shows current phase
 
 ---
 

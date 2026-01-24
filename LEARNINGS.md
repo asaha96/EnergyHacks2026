@@ -365,6 +365,84 @@ const [mapWidth, setMapWidth] = useState('100%');
 - **Leaflet map invalidation required**: After map container resize, call `map.invalidateSize()` after transition completes (~350ms delay) to ensure tiles render correctly
 - Sidebar has z-50, ensure map controls have lower z-index or adjust positioning
 
+#### AgentSidebar Pattern
+*From Task 6.1 - Date: Jan 24, 2026*
+
+**Files Created:**
+- `components/agent/agent-message.tsx` - Individual message component with icon/text/timestamp
+- `components/agent/agent-message-stream.tsx` - Auto-scrolling message container
+- `components/agent/agent-progress.tsx` - Phase progress indicator (5 analysis phases)
+- `components/agent/agent-sidebar.tsx` - Main sidebar with animated transition
+- `components/agent/index.ts` - Barrel exports
+
+**Message Types:**
+```tsx
+type AgentMessageType = 'loading' | 'success' | 'info' | 'error' | 'search' | 'processing' | 'analysis' | 'result';
+
+interface AgentMessageData {
+  id: string;
+  type: AgentMessageType;
+  text: string;
+  timestamp: Date;
+}
+```
+
+**Analysis Phases:**
+```tsx
+type AnalysisPhase = 'initializing' | 'terrain' | 'climate' | 'regulations' | 'optimization' | 'complete';
+```
+
+**Usage in area-select page:**
+```tsx
+import { AgentSidebar, type AnalysisPhase, type AgentMessageData } from '@/components/agent';
+
+// State
+const [isAgentSidebarOpen, setIsAgentSidebarOpen] = useState(false);
+const [isAnalyzing, setIsAnalyzing] = useState(false);
+const [currentPhase, setCurrentPhase] = useState<AnalysisPhase>('initializing');
+const [agentMessages, setAgentMessages] = useState<AgentMessageData[]>([]);
+
+// Helper to add messages
+const addAgentMessage = useCallback((type: AgentMessageType, text: string) => {
+  const message: AgentMessageData = {
+    id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    type,
+    text,
+    timestamp: new Date(),
+  };
+  setAgentMessages(prev => [...prev, message]);
+}, []);
+
+// Component
+<AgentSidebar
+  isOpen={isAgentSidebarOpen}
+  onClose={() => setIsAgentSidebarOpen(false)}
+  onBack={handleBackToConstraints}
+  onStop={handleStopAnalysis}
+  onComplete={handleViewPlan}
+  onMapWidthChange={handleMapWidthChange}
+  messages={agentMessages}
+  currentPhase={currentPhase}
+  isAnalyzing={isAnalyzing}
+/>
+```
+
+**Mode Switching Pattern:**
+- Constraints sidebar and Agent sidebar are mutually exclusive
+- When user clicks "Analyze", constraints closes, agent opens
+- Back button returns to constraints with reset state
+- Uses same `onMapWidthChange` pattern for map compression
+- Animation timing: 400ms delay between closing one and opening other
+
+**Auto-scroll Behavior:**
+- Container auto-scrolls to bottom on new messages
+- Detects manual scroll-up to pause auto-scroll
+- Resumes auto-scroll when user scrolls back to bottom
+
+**Gotchas:**
+- Use unique message IDs with timestamp + random suffix to prevent React key collisions
+- Relative time formatting updates on re-render only (not real-time clock)
+
 #### Technical Constraints Components
 *From Task 5.4*
 
@@ -807,4 +885,4 @@ useEffect(() => {
 ---
 
 *Last Updated: Jan 24, 2026*
-*Last Task Completed: 5.5*
+*Last Task Completed: 6.1*
