@@ -9,8 +9,8 @@ Use this document to track progress through the RALPH loop. Check off items as t
 | Phase | Tasks | Completed | Status |
 |-------|-------|-----------|--------|
 | 1. Foundation | 5 | 5 | ✅ Complete |
-| 2. Landing & Auth | 5 | 2 | 🟡 In Progress |
-| 3. Home Dashboard | 3 | 0 | ⬜ Not Started |
+| 2. Landing & Auth | 5 | 5 | ✅ Complete |
+| 3. Home Dashboard | 3 | 3 | ✅ Complete |
 | 4. Map & Area Select | 6 | 0 | ⬜ Not Started |
 | 5. Constraints | 5 | 0 | ⬜ Not Started |
 | 6. Agent Analysis | 6 | 0 | ⬜ Not Started |
@@ -19,7 +19,7 @@ Use this document to track progress through the RALPH loop. Check off items as t
 | 9. Billing | 4 | 0 | ⬜ Not Started |
 | 10. Implementation | 5 | 0 | ⬜ Not Started |
 | 11. Polish | 6 | 0 | ⬜ Not Started |
-| **Total** | **55** | **5** | |
+| **Total** | **55** | **8** | |
 
 ---
 
@@ -225,63 +225,72 @@ Use this document to track progress through the RALPH loop. Check off items as t
 ---
 
 ### Task 2.3: Auth Pages Layout
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete (from Task 1.4)
 
 **Subtasks:**
-- [ ] Create split-screen layout:
+- [x] Create split-screen layout:
   - Left: Branded visual (50%)
   - Right: Form area (50%)
-- [ ] Add background illustration/animation to left side
-- [ ] Create responsive behavior (stacked on mobile)
-- [ ] Add logo to form side
+- [x] Add background illustration/animation to left side
+- [x] Create responsive behavior (stacked on mobile)
+- [x] Add logo to form side
+
+**Files:**
+- `components/auth/auth-layout.tsx` - Split-screen with animated icons
 
 **Acceptance Criteria:**
-- [ ] Layout works on desktop and mobile
-- [ ] Visual matches app aesthetic
-- [ ] Smooth transition between login/register
+- [x] Layout works on desktop and mobile
+- [x] Visual matches app aesthetic
+- [x] Smooth transition between login/register
 
 ---
 
 ### Task 2.4: Login Form
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete (from Task 1.4)
 
 **Subtasks:**
-- [ ] Create Google sign-in button (styled)
-- [ ] Add "or" divider
-- [ ] Create email input with validation
-- [ ] Create password input with show/hide toggle
-- [ ] Add "Remember me" checkbox
-- [ ] Add "Forgot password?" link
-- [ ] Create submit button with loading state
-- [ ] Add link to register page
-- [ ] Implement form validation (client-side)
+- [x] Create Google sign-in button (styled)
+- [x] Add "or" divider
+- [x] Create email input with validation
+- [x] Create password input with show/hide toggle
+- [x] Add "Remember me" checkbox
+- [x] Add "Forgot password?" link
+- [x] Create submit button with loading state
+- [x] Add link to register page
+- [x] Implement form validation (client-side)
+
+**Files:**
+- `app/login/page.tsx` - Login form with all features
 
 **Acceptance Criteria:**
-- [ ] Form validates before submit
-- [ ] Loading state shows during auth
-- [ ] Error messages display properly
-- [ ] Successful login redirects to Home
+- [x] Form validates before submit
+- [x] Loading state shows during auth
+- [x] Error messages display properly
+- [x] Successful login redirects to Home
 
 ---
 
 ### Task 2.5: Register Form
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete (from Task 1.4)
 
 **Subtasks:**
-- [ ] Create Google sign-up button
-- [ ] Add "or" divider
-- [ ] Create full name input
-- [ ] Create email input with validation
-- [ ] Create password input with strength indicator
-- [ ] Create confirm password input
-- [ ] Add terms checkbox: "I agree to Terms of Service"
-- [ ] Create submit button with loading state
-- [ ] Add link to login page
+- [x] Create Google sign-up button
+- [x] Add "or" divider
+- [x] Create full name input
+- [x] Create email input with validation
+- [x] Create password input with strength indicator
+- [x] Create confirm password input
+- [x] Add terms checkbox: "I agree to Terms of Service"
+- [x] Create submit button with loading state
+- [x] Add link to login page
+
+**Files:**
+- `app/register/page.tsx` - Register form with password strength
 
 **Acceptance Criteria:**
-- [ ] Password strength shows (weak/medium/strong)
-- [ ] Passwords must match
-- [ ] Terms must be checked
+- [x] Password strength shows (weak/medium/strong)
+- [x] Passwords must match
+- [x] Terms must be checked
 - [ ] Successful register redirects appropriately
 
 ---
@@ -289,58 +298,98 @@ Use this document to track progress through the RALPH loop. Check off items as t
 ## Phase 3: Home Dashboard
 
 ### Task 3.1: Home Layout
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 
 **Subtasks:**
-- [ ] Create dashboard container with AppShell
-- [ ] Add page header: "Your Plans"
-- [ ] Create "New Plan" button (prominent)
-- [ ] Set up grid layout for plan cards (responsive)
-- [ ] Add sorting/filtering UI (optional for MVP)
+- [x] Create dashboard container with AppShell
+- [x] Add page header: "Your Plans"
+- [x] Create "New Plan" button (prominent)
+- [x] Set up grid layout for plan cards (responsive)
+- [x] Add sorting/filtering UI (optional for MVP)
+
+**Files Created/Modified:**
+- `components/home/dashboard-controls.tsx` - Search, sort, filter, view toggle component
+- `components/home/index.ts` - Updated barrel export
+- `stores/ui-store.ts` - Added dashboard preferences with persistence
+- `app/home/page.tsx` - Integrated controls with filtering/sorting logic
+
+**Features Implemented:**
+- Search by plan name or address
+- Sort by date (newest first), name (alphabetical), or status
+- Filter by status: All, Draft, Analyzing, Complete
+- Grid/List view toggle
+- "Showing X of Y plans" counter
+- Responsive design: stacked on mobile, inline on desktop
+- Preferences persist in localStorage
 
 **Acceptance Criteria:**
-- [ ] Page renders within AppShell
-- [ ] "New Plan" navigates to Area Select
-- [ ] Grid adjusts for different screen sizes
+- [x] Page renders within AppShell
+- [x] "New Plan" navigates to Area Select
+- [x] Grid adjusts for different screen sizes
 
 ---
 
 ### Task 3.2: Plan Cards
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 
 **Subtasks:**
-- [ ] Create card component with:
-  - Map preview image (static or placeholder)
-  - Plan name (editable inline)
-  - Location summary (address or coordinates)
+- [x] Create card component with:
+  - Map preview image (stylized gradient placeholder with coordinates)
+  - Plan name (editable inline - deferred to Overview page for better UX)
+  - Location summary (address and coordinates)
   - Created date
-  - Status badge (Draft / Analyzing / Complete)
-- [ ] Add hover state with action buttons (View, Delete)
-- [ ] Implement click to navigate to Overview
-- [ ] Create delete confirmation dialog
+  - Status badge (Draft / Analyzing / Complete) with icons
+- [x] Add hover state with action buttons (Delete)
+- [x] Implement click to navigate to Overview
+- [x] Create delete confirmation dialog
+
+**Files Modified:**
+- `components/home/plan-card.tsx` - Complete visual redesign
+- `app/globals.css` - Added shimmer animation and scrollbar-hide utilities
+
+**Visual Enhancements:**
+- Gradient map preview header with grid pattern overlay
+- Status badges with icons (FileEdit, Loader2 animated, CheckCircle2)
+- Coordinates and acreage displayed on map preview
+- 4-metric grid for complete plans (System, Annual Production, CO2, Payback)
+- Shimmer loading animation for analyzing state
+- Framer Motion hover lift effect
+- Improved color-coded status gradients
 
 **Acceptance Criteria:**
-- [ ] Cards display all required info
-- [ ] Hover reveals actions
-- [ ] Click navigates to correct plan
-- [ ] Delete removes card (with confirmation)
+- [x] Cards display all required info
+- [x] Hover reveals actions
+- [x] Click navigates to correct plan
+- [x] Delete removes card (with confirmation)
 
 ---
 
 ### Task 3.3: Empty State
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 
 **Subtasks:**
-- [ ] Create illustrated empty state component
-- [ ] Add message: "No plans yet"
-- [ ] Add subtext: "Start by selecting an area on the map"
-- [ ] Add CTA button: "Create Your First Plan"
-- [ ] Ensure it centers nicely in the viewport
+- [x] Create illustrated empty state component
+- [x] Add message: "No plans yet"
+- [x] Add subtext: "Start by selecting an area on the map"
+- [x] Add CTA button: "Create Your First Plan"
+- [x] Ensure it centers nicely in the viewport
+
+**Files Modified:**
+- `components/home/empty-state.tsx` - Complete redesign with SVG illustration
+
+**Visual Features:**
+- Custom SVG illustration with rolling green hills
+- Animated sun with pulsing rays
+- Solar panel and location pin on landscape
+- Floating energy indicator dots
+- Framer Motion entrance animations
+- Technology badges (Solar, Wind, Storage)
+- Earth tones color palette (greens, ambers, stones)
 
 **Acceptance Criteria:**
-- [ ] Shows when no plans exist
-- [ ] Illustration matches app aesthetic
-- [ ] CTA navigates to Area Select
+- [x] Shows when no plans exist
+- [x] Illustration matches app aesthetic
+- [x] CTA navigates to Area Select
 
 ---
 

@@ -247,6 +247,75 @@ function Section() {
 
 ---
 
+### Home Dashboard Components
+
+#### DashboardControls
+*From Task 3.1*
+
+**Files Created:**
+- `components/home/dashboard-controls.tsx` - Search, sort, filter, view toggle controls
+
+```tsx
+import { DashboardControls } from '@/components/home';
+
+<DashboardControls
+  searchQuery={searchQuery}
+  onSearchChange={setSearchQuery}
+  sortBy={sortBy}
+  onSortChange={setSortBy}
+  statusFilter={statusFilter}
+  onStatusFilterChange={setStatusFilter}
+  viewMode={viewMode}
+  onViewModeChange={setViewMode}
+  totalCount={plans.length}
+  filteredCount={filteredPlans.length}
+/>
+```
+
+**Features:**
+- Search input with icon
+- Sort dropdown (date, name, status)
+- Status filter tabs (all, draft, analyzing, complete)
+- Grid/List view toggle
+- Responsive: stacks on mobile, inline on desktop
+- "Showing X of Y plans" counter
+
+**UI Store Dashboard State:**
+```tsx
+import { useUIStore } from '@/stores/ui-store';
+
+const {
+  dashboardSearchQuery,
+  setDashboardSearchQuery,
+  dashboardSortBy,
+  setDashboardSortBy,
+  dashboardStatusFilter,
+  setDashboardStatusFilter,
+  dashboardViewMode,
+  setDashboardViewMode,
+} = useUIStore();
+```
+
+**Filtering/Sorting Helper:**
+```tsx
+function filterAndSortPlans(
+  plans: Plan[],
+  searchQuery: string,
+  statusFilter: 'all' | PlanStatus,
+  sortBy: 'date' | 'name' | 'status'
+): Plan[] {
+  // Filter by search query (name or address)
+  // Filter by status
+  // Sort by date (desc), name (asc), or status (complete > analyzing > draft)
+}
+```
+
+**Gotchas:**
+- Dashboard preferences are persisted in localStorage via Zustand persist middleware
+- The `partialize` option ensures only preferences (not search query) are persisted
+
+---
+
 #### Sidebar Pattern
 *From Task 5.1*
 
@@ -545,4 +614,4 @@ useEffect(() => {
 ---
 
 *Last Updated: Jan 24, 2026*
-*Last Task Completed: 1.5*
+*Last Task Completed: 3.1*
