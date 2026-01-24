@@ -11,7 +11,7 @@ Use this document to track progress through the RALPH loop. Check off items as t
 | 1. Foundation | 5 | 5 | ✅ Complete |
 | 2. Landing & Auth | 5 | 5 | ✅ Complete |
 | 3. Home Dashboard | 3 | 3 | ✅ Complete |
-| 4. Map & Area Select | 6 | 0 | ⬜ Not Started |
+| 4. Map & Area Select | 6 | 1 | 🔄 In Progress |
 | 5. Constraints | 5 | 0 | ⬜ Not Started |
 | 6. Agent Analysis | 6 | 0 | ⬜ Not Started |
 | 7. Overview | 5 | 0 | ⬜ Not Started |
@@ -396,22 +396,37 @@ Use this document to track progress through the RALPH loop. Check off items as t
 ## Phase 4: Map & Area Selection
 
 ### Task 4.1: Map Integration
-**Status:** ⬜ Not Started
+**Status:** ✅ Complete
 
 **Subtasks:**
-- [ ] Install react-leaflet and dependencies
-- [ ] Create dynamic import wrapper (SSR fix)
-- [ ] Set up MapContainer with custom styling
-- [ ] Configure tile layer (Mapbox or CartoDB Positron)
-- [ ] Style tiles to match app theme (muted colors)
-- [ ] Set default center (US center or user's location)
-- [ ] Set appropriate default zoom
+- [x] Install react-leaflet and dependencies
+- [x] Create dynamic import wrapper (SSR fix)
+- [x] Set up MapContainer with custom styling
+- [x] Configure tile layer (Mapbox or CartoDB Positron)
+- [x] Style tiles to match app theme (muted colors)
+- [x] Set default center (US center or user's location)
+- [x] Set appropriate default zoom
+
+**Files Created:**
+- `components/map/map-container.tsx` - Core Leaflet map component
+- `components/map/dynamic-map.tsx` - SSR-safe dynamic import wrapper
+- `components/map/tile-layers.ts` - Tile layer configurations (Positron, Satellite, Terrain)
+- `components/map/index.ts` - Barrel exports
+- `app/area-select/page.tsx` - Full-screen map page with UI overlays
+
+**Features Implemented:**
+- CartoDB Positron tiles for muted, clean aesthetic
+- Dark mode support with tile inversion filter
+- Auto-geolocation with smooth fly-to animation
+- Custom Leaflet popup/attribution styling matching app theme
+- Loading skeleton during map initialization
+- Responsive UI overlays (logo, instructions, navigation)
 
 **Acceptance Criteria:**
-- [ ] Map renders without SSR errors
-- [ ] Tiles load correctly
-- [ ] Pan and zoom work smoothly
-- [ ] Visual style matches app
+- [x] Map renders without SSR errors
+- [x] Tiles load correctly
+- [x] Pan and zoom work smoothly
+- [x] Visual style matches app
 
 ---
 
