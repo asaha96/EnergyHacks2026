@@ -15,7 +15,8 @@ import {
   Database,
   TrendingUp,
   ChevronRight,
-  LayoutGrid
+  LayoutGrid,
+  type LucideIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -75,7 +76,7 @@ interface AgentMessageProps {
   className?: string;
 }
 
-const iconMap: Record<AgentMessageType, React.ElementType> = {
+const iconMap: Record<AgentMessageType, LucideIcon> = {
   thinking: Sparkles,
   loading: Loader2,
   success: Check,

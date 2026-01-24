@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import dynamic from 'next/dynamic';
+import nextDynamic from 'next/dynamic';
 import L from 'leaflet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Leaf, Crosshair, Ruler, MapPin, Sparkles } from 'lucide-react';
@@ -11,40 +11,56 @@ import { TerrainOverlay, SolarOverlay, WindOverlay, ExclusionOverlay, OptimalOve
 import { ConstraintsSidebar, FinancialConstraints, EnergyConstraints, LandConstraints, TechnicalConstraints, TimelineConstraints } from '@/components/constraints';
 import { AgentSidebar, type AnalysisPhase, type AgentMessageData, type AgentMessageType } from '@/components/agent';
 import { AgentConsentModal } from '@/components/agent/agent-consent-modal';
-import { SecurityLog, type LogEntry } from '@/components/agent/security-log';
+
 import { Button } from '@/components/ui/button';
 import { calculateAreaWithUnits, formatArea, calculateCentroid } from '@/lib/geo';
 import { usePlanStore } from '@/stores/plan-store';
 import { useConstraintsValidation } from '@/hooks/use-constraints-validation';
 import type { FinancingType, EnergyGoal, GridConnection, Technology, MaintenanceCapacity, Timeline } from '@/types/plan';
 
-const MapControls = dynamic(
+const MapControls = nextDynamic(
   () => import('@/components/map/map-internals').then((mod) => mod.MapControls),
   { ssr: false }
 );
 
-const AddressSearch = dynamic(
+const AddressSearch = nextDynamic(
   () => import('@/components/map/map-internals').then((mod) => mod.AddressSearch),
   { ssr: false }
 );
 
-const ProspectMode = dynamic(
+const ProspectMode = nextDynamic(
   () => import('@/components/map/map-internals').then((mod) => mod.ProspectMode),
   { ssr: false }
 );
 
-const CompletedPolygon = dynamic(
+const CompletedPolygon = nextDynamic(
   () => import('@/components/map/map-internals').then((mod) => mod.CompletedPolygon),
   { ssr: false }
 );
 
-const EquipmentMarkerGroup = dynamic(
+const EquipmentMarkerGroup = nextDynamic(
   () => import('@/components/map/markers/equipment-marker').then((mod) => mod.EquipmentMarkerGroup),
   { ssr: false }
 );
 
-const ZoneLabel = dynamic(
+const ZoneLabel = nextDynamic(
   () => import('@/components/map/markers/zone-label').then((mod) => mod.ZoneLabel),
+  { ssr: false }
+);
+
+// 3D Terrain Analysis Components
+const TerrainAnalysisScene = nextDynamic(
+  () => import('@/components/3d/terrain-analysis-scene').then((mod) => mod.TerrainAnalysisScene),
+  { ssr: false }
+);
+
+const AnalysisOverlay = nextDynamic(
+  () => import('@/components/3d/analysis-overlay').then((mod) => mod.AnalysisOverlay),
+  { ssr: false }
+);
+
+const MapTo3DTransition = nextDynamic(
+  () => import('@/components/3d/map-transition').then((mod) => mod.MapTo3DTransition),
   { ssr: false }
 );
 
@@ -80,6 +96,12 @@ export default function AreaSelectPage() {
     label: string;
   }>>([]);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
+  
+  // -- 3D TERRAIN ANALYSIS STATE --
+  const [show3DView, setShow3DView] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [isTransitioningTo3D, setIsTransitioningTo3D] = useState(false);
+  // -------------------------------
 
   const { draftConstraints, updateDraftConstraints, addPlan, setDraftArea } = usePlanStore();
 
@@ -451,6 +473,7 @@ export default function AreaSelectPage() {
     setIsAnalyzing(true);
     setAgentMessages([]);
     setCurrentPhase('data-collection');
+    setAnalysisProgress(0);
     clearAllOverlays();
     clearEquipment();
 
@@ -509,6 +532,7 @@ export default function AreaSelectPage() {
     addAgentMessage('success', 'Data collection complete', {
       value: '3 data sources integrated'
     });
+    setAnalysisProgress(0.2);
 
     setCurrentPhase('constraint-integration');
     await delay(400);
@@ -543,6 +567,7 @@ export default function AreaSelectPage() {
     addAgentMessage('success', 'Constraints validated', {
       detail: 'All parameters within acceptable ranges'
     });
+    setAnalysisProgress(0.4);
 
     setCurrentPhase('technology-optimization');
     await delay(400);
@@ -579,6 +604,7 @@ export default function AreaSelectPage() {
     }
 
     addAgentMessage('success', 'Technology stack optimized');
+    setAnalysisProgress(0.6);
 
     setCurrentPhase('system-design');
     await delay(400);
@@ -625,6 +651,7 @@ export default function AreaSelectPage() {
     addAgentMessage('success', 'System design finalized', {
       value: '45 kW total capacity'
     });
+    setAnalysisProgress(0.8);
 
     setCurrentPhase('financial-modeling');
     await delay(400);
@@ -663,6 +690,7 @@ export default function AreaSelectPage() {
       value: '$147,200',
       detail: 'After system costs and maintenance'
     });
+    setAnalysisProgress(1.0);
 
     setCurrentPhase('complete');
     await delay(300);
@@ -710,26 +738,39 @@ export default function AreaSelectPage() {
     // PRIVACY-FIRST AI CHECK - REMOVED for Late Consent Flow
     // We now allow analysis to run freely. Consent is requested at Save.
 
-    // Close constraints, open agent sidebar
+    // Close constraints sidebar and start the cinematic transition
     setIsConstraintsSidebarOpen(false);
-    setIsAgentSidebarOpen(true);
+    setIsAgentSidebarOpen(false);
+    setAnalysisProgress(0);
+    setIsTransitioningTo3D(true);
+  }, [validation.canProceed]);
 
-    // Start the analysis after a brief delay for animation
+  const handleTransitionComplete = useCallback(() => {
+    setIsTransitioningTo3D(false);
+    setShow3DView(true);
+    
+    // Start the analysis after transition completes
     setTimeout(() => {
       runAnalysis();
-    }, 400);
-  }, [validation.canProceed, runAnalysis, hasAgentConsent]);
+    }, 300);
+  }, [runAnalysis]);
 
   const handleStopAnalysis = useCallback(() => {
     setIsAnalyzing(false);
+    setShow3DView(false);
+    setIsTransitioningTo3D(false);
+    setAnalysisProgress(0);
     addAgentMessage('error', 'Analysis stopped by user');
   }, [addAgentMessage]);
 
   const handleBackToConstraints = useCallback(() => {
     setIsAgentSidebarOpen(false);
+    setShow3DView(false);
+    setIsTransitioningTo3D(false);
     setIsAnalyzing(false);
     setAgentMessages([]);
     setCurrentPhase('data-collection');
+    setAnalysisProgress(0);
     clearAllOverlays();
     clearEquipment();
 
@@ -914,6 +955,9 @@ export default function AreaSelectPage() {
     setProspectedArea(null);
     setLocationName(null);
     setIsAgentSidebarOpen(false);
+    setShow3DView(false);
+    setIsTransitioningTo3D(false);
+    setAnalysisProgress(0);
     summaryMessageRef.current = null;
   }, []);
 
@@ -997,13 +1041,21 @@ export default function AreaSelectPage() {
     <div className="relative h-screen w-screen overflow-hidden bg-background">
       <motion.div
         initial={{ opacity: 0 }}
-        animate={{ opacity: 1, width: mapWidth }}
+        animate={{ 
+          opacity: (show3DView || isTransitioningTo3D) ? 0 : 1, 
+          width: mapWidth,
+          scale: (show3DView || isTransitioningTo3D) ? 0.95 : 1
+        }}
         transition={{
-          opacity: { duration: 0.5 },
-          width: { type: 'spring', damping: 30, stiffness: 300 }
+          opacity: { duration: 0.6 },
+          width: { type: 'spring', damping: 30, stiffness: 300 },
+          scale: { duration: 0.6 }
         }}
         className="absolute inset-0"
-        style={{ width: mapWidth }}
+        style={{ 
+          width: mapWidth,
+          pointerEvents: (show3DView || isTransitioningTo3D) ? 'none' : 'auto'
+        }}
       >
         <DynamicMap
           tileLayer={tileLayer}
@@ -1083,6 +1135,34 @@ export default function AreaSelectPage() {
           )}
         </DynamicMap>
       </motion.div>
+
+      {/* Cinematic Transition from Map to 3D */}
+      <MapTo3DTransition
+        isTransitioning={isTransitioningTo3D}
+        onTransitionComplete={handleTransitionComplete}
+        locationName={locationName}
+      />
+
+      {/* 3D Terrain Analysis View */}
+      <TerrainAnalysisScene
+        phase={currentPhase}
+        progress={analysisProgress}
+        isVisible={show3DView}
+      />
+      
+      {show3DView && (
+        <AnalysisOverlay
+          phase={currentPhase}
+          isAnalyzing={isAnalyzing}
+          progress={analysisProgress}
+          locationName={locationName}
+          areaAcres={prospectedArea ? calculateAreaWithUnits(prospectedArea).acres : undefined}
+          onBack={handleBackToConstraints}
+          onStop={isAnalyzing ? handleStopAnalysis : undefined}
+          onSave={currentPhase === 'complete' ? handleSavePlan : undefined}
+          isSaving={isSavingPlan}
+        />
+      )}
 
       <AnimatePresence>
         {!isProspecting && (
