@@ -24,6 +24,11 @@ const ProspectMode = dynamic(
   { ssr: false }
 );
 
+const CompletedPolygon = dynamic(
+  () => import('@/components/map/map-internals').then((mod) => mod.CompletedPolygon),
+  { ssr: false }
+);
+
 export default function AreaSelectPage() {
   const router = useRouter();
   const mapRef = useRef<L.Map | null>(null);
@@ -90,6 +95,10 @@ export default function AreaSelectPage() {
                 onComplete={handleProspectComplete}
                 onCancel={handleProspectCancel}
               />
+
+              {!isProspecting && prospectedArea && (
+                <CompletedPolygon coordinates={prospectedArea} />
+              )}
             </>
           )}
         </DynamicMap>

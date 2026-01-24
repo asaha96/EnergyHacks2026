@@ -86,8 +86,23 @@ interface DrawingHandlerProps {
 }
 
 function DrawingHandler({ tool, points, setPoints, onComplete }: DrawingHandlerProps) {
+  const map = useMap();
   const rectStartRef = useRef<PolygonCoordinates | null>(null);
   const [previewPoint, setPreviewPoint] = useState<PolygonCoordinates | null>(null);
+
+  useEffect(() => {
+    const container = map.getContainer();
+    
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      if (tool === 'polygon' && points.length >= 3) {
+        onComplete();
+      }
+    };
+
+    container.addEventListener('contextmenu', handleContextMenu);
+    return () => container.removeEventListener('contextmenu', handleContextMenu);
+  }, [map, tool, points.length, onComplete]);
 
   useMapEvents({
     click(e) {
@@ -133,6 +148,21 @@ function DrawingHandler({ tool, points, setPoints, onComplete }: DrawingHandlerP
         <Polygon positions={previewPositions} pathOptions={PREVIEW_STYLE} />
       )}
     </>
+  );
+}
+
+interface CompletedPolygonProps {
+  coordinates: PolygonCoordinates[];
+}
+
+export function CompletedPolygon({ coordinates }: CompletedPolygonProps) {
+  if (!coordinates || coordinates.length < 3) return null;
+
+  return (
+    <Polygon
+      positions={coordinates.map((c) => [c.lat, c.lng] as L.LatLngTuple)}
+      pathOptions={POLYGON_STYLE}
+    />
   );
 }
 
@@ -357,9 +387,15 @@ export function ProspectMode({
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Press <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">Esc</kbd> to cancel
-              {canComplete && (
-                <> or <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">Enter</kbd> to confirm</>
+              {canComplete ? (
+                <>
+                  <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">Right-click</kbd> or{' '}
+                  <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">Enter</kbd> to confirm
+                </>
+              ) : (
+                <>
+                  <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">Esc</kbd> to cancel
+                </>
               )}
             </p>
           </div>
