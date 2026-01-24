@@ -36,8 +36,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { DynamicMap, type TileLayerType, type EquipmentPlacement } from '@/components/map';
 import { OptimalOverlay } from '@/components/map/overlays';
-import { MetricsGrid, SectionNavigation } from '@/components/overview';
-import { AnalyticsSidebar } from '@/components/analytics';
+import { PlanDetailPanel } from '@/components/overview';
 import { usePlanStore } from '@/stores/plan-store';
 import type { Plan } from '@/types/plan';
 
@@ -68,7 +67,6 @@ export default function OverviewPage() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showAnalytics, setShowAnalytics] = useState(false);
   const mapRef = useRef<L.Map | null>(null);
 
   useEffect(() => {
@@ -213,8 +211,8 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      <div className="flex-1 lg:w-[40%] overflow-y-auto border-l border-border">
-        <header className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border px-6 py-4">
+      <div className="flex-1 lg:w-[40%] flex flex-col border-l border-border overflow-hidden">
+        <header className="shrink-0 z-30 bg-background border-b border-border px-6 py-4">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               {isEditingName ? (
@@ -285,30 +283,7 @@ export default function OverviewPage() {
           )}
         </header>
 
-        <div className="p-6 space-y-6">
-          <MetricsGrid
-            systemSizeKw={plan.analysis?.systemSizeKw || 0}
-            annualProductionKwh={plan.analysis?.annualProductionKwh || 0}
-            totalCost={plan.financials?.totalCost || 0}
-            netCost={plan.financials?.netCostAfterIncentives || 0}
-            paybackYears={plan.financials?.paybackYears || 0}
-            annualSavings={plan.financials?.annualSavings || 0}
-            co2OffsetTons={plan.analysis?.co2OffsetTons || 0}
-          />
-
-          <SectionNavigation
-            onAnalyticsClick={() => setShowAnalytics(true)}
-            onBillingClick={() => {}}
-            onImplementationClick={() => {}}
-          />
-
-          <section className="pt-4 border-t border-border">
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>Created {new Date(plan.createdAt).toLocaleDateString()}</span>
-              <span>{plan.area.areaAcres.toFixed(2)} acres</span>
-            </div>
-          </section>
-        </div>
+        <PlanDetailPanel plan={plan} className="flex-1" />
       </div>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
@@ -331,12 +306,6 @@ export default function OverviewPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <AnalyticsSidebar
-        isOpen={showAnalytics}
-        onClose={() => setShowAnalytics(false)}
-        plan={plan}
-      />
     </div>
   );
 }

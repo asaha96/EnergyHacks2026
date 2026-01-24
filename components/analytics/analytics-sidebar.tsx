@@ -2,16 +2,15 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, TrendingUp, DollarSign, Leaf, ArrowLeftRight } from 'lucide-react';
+import { X, TrendingUp, DollarSign, Leaf } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProductionTab } from './tabs/production-tab';
 import { FinancialTab } from './tabs/financial-tab';
 import { EnvironmentalTab } from './tabs/environmental-tab';
-import { ComparisonTab } from './tabs/comparison-tab';
 import type { Plan } from '@/types/plan';
 
-export type AnalyticsTab = 'production' | 'financial' | 'environmental' | 'comparison';
+export type AnalyticsTab = 'production' | 'financial' | 'environmental';
 
 interface AnalyticsSidebarProps {
   isOpen: boolean;
@@ -45,7 +44,6 @@ export function AnalyticsSidebar({
     { id: 'production' as const, label: 'Production', icon: TrendingUp },
     { id: 'financial' as const, label: 'Financial', icon: DollarSign },
     { id: 'environmental' as const, label: 'Environmental', icon: Leaf },
-    { id: 'comparison' as const, label: 'Comparison', icon: ArrowLeftRight },
   ];
 
   return (
@@ -130,7 +128,6 @@ export function AnalyticsSidebar({
                   {activeTab === 'production' && <ProductionTab plan={plan} />}
                   {activeTab === 'financial' && <FinancialTab plan={plan} />}
                   {activeTab === 'environmental' && <EnvironmentalTab plan={plan} />}
-                  {activeTab === 'comparison' && <ComparisonTab plan={plan} />}
                 </motion.div>
               </AnimatePresence>
             </div>

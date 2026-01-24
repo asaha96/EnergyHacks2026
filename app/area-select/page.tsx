@@ -73,7 +73,7 @@ export default function AreaSelectPage() {
   }>>([]);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
 
-  const { draftConstraints, updateDraftConstraints, addPlan, setCurrentPlan, setDraftArea } = usePlanStore();
+  const { draftConstraints, updateDraftConstraints, addPlan, setDraftArea } = usePlanStore();
 
   const budget: [number, number] = [
     draftConstraints?.budget?.min ?? 50000,
@@ -787,12 +787,11 @@ export default function AreaSelectPage() {
     await new Promise(resolve => setTimeout(resolve, 800));
 
     addPlan(newPlan);
-    setCurrentPlan(newPlan.id);
     setDraftArea(null);
 
     setIsSavingPlan(false);
-    router.push('/overview');
-  }, [prospectedArea, getAnalysisValues, locationName, draftConstraints, equipmentPlacements, addPlan, setCurrentPlan, setDraftArea, router]);
+    router.push(`/overview/${newPlan.id}`);
+  }, [prospectedArea, getAnalysisValues, locationName, draftConstraints, equipmentPlacements, addPlan, setDraftArea, router]);
 
   const handleStartOver = useCallback(() => {
     setVisibleOverlays(new Set());

@@ -6,10 +6,8 @@ import {
   Sun, 
   DollarSign, 
   Calendar, 
-  TrendingUp, 
-  Leaf,
+  TrendingUp,
   ArrowUpRight,
-  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -20,7 +18,6 @@ interface MetricsGridProps {
   netCost: number;
   paybackYears: number;
   annualSavings: number;
-  co2OffsetTons: number;
   className?: string;
 }
 
@@ -154,7 +151,6 @@ export function MetricsGrid({
   netCost,
   paybackYears,
   annualSavings,
-  co2OffsetTons,
   className,
 }: MetricsGridProps) {
   const savingsPercent = totalCost > 0 ? ((totalCost - netCost) / totalCost) * 100 : 0;
@@ -308,43 +304,6 @@ export function MetricsGrid({
         </motion.div>
       </div>
 
-      <motion.div
-        variants={itemVariants}
-        className="relative overflow-hidden rounded-xl bg-gradient-to-r from-green-950 to-emerald-900 p-5"
-      >
-        <div className="absolute inset-0 opacity-30">
-          <svg className="w-full h-full" viewBox="0 0 400 100" preserveAspectRatio="none">
-            <path d="M0,50 Q100,20 200,50 T400,50" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-green-400" />
-            <path d="M0,60 Q100,30 200,60 T400,60" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-green-400" />
-            <path d="M0,70 Q100,40 200,70 T400,70" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-green-400" />
-          </svg>
-        </div>
-        
-        <div className="relative flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-xl bg-green-500/20 flex items-center justify-center">
-              <Leaf className="h-6 w-6 text-green-400" />
-            </div>
-            <div>
-              <p className="text-sm text-green-300/80 font-medium">Environmental Impact</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-white">{co2OffsetTons}</span>
-                <span className="text-green-300/80">tons CO₂/year</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="text-right">
-            <div className="flex items-center gap-1.5 text-green-300/80 text-sm">
-              <Sparkles className="h-4 w-4" />
-              <span>Equivalent to</span>
-            </div>
-            <p className="text-lg font-semibold text-white mt-0.5">
-              {Math.round(co2OffsetTons * 16.5)} trees planted
-            </p>
-          </div>
-        </div>
-      </motion.div>
     </motion.div>
   );
 }
