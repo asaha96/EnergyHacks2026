@@ -76,7 +76,7 @@ export function PlanCard({ plan }: PlanCardProps) {
   };
 
   return (
-    <Link href={`/plan/${plan.id}`} className="block h-full outline-none group/card">
+    <Link href={`/overview/${plan.id}`} className="block h-full outline-none group/card">
       <motion.div
         whileHover={{ y: -3 }}
         transition={{ type: 'spring', stiffness: 400, damping: 25 }}
@@ -115,7 +115,10 @@ export function PlanCard({ plan }: PlanCardProps) {
               <AlertDialog>
                 <AlertDialogTrigger
                   className="inline-flex items-center justify-center h-7 w-7 rounded-md bg-white/90 backdrop-blur-sm text-stone-500 hover:text-red-600 hover:bg-white transition-colors shadow-sm"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   <span className="sr-only">Delete plan</span>

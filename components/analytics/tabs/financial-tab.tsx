@@ -1,19 +1,30 @@
 'use client';
 
-import { useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { useMemo, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   DollarSign, 
   Percent, 
   Calendar, 
   PiggyBank, 
-  TrendingUp,
   BadgeCheck,
   Calculator,
   Building,
+  Landmark,
+  Zap,
+  Sun,
+  Wind,
+  Battery,
+  Cable,
+  Wrench,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Plan } from '@/types/plan';
+import { CostBreakdownChart } from '../charts/cost-breakdown-chart';
+import { CashFlowChart } from '../charts/cash-flow-chart';
+import { generateIncentivesData, generateEquipmentData, type IncentiveData, type EquipmentLineItem } from '../charts/financial-data';
 
 interface FinancialTabProps {
   plan: Plan | null;
@@ -76,60 +87,155 @@ function MetricCard({ icon, label, value, subtext, gradient, highlight }: Metric
   );
 }
 
-interface IncentiveRowProps {
-  name: string;
-  amount: number;
-  description: string;
-}
+const INCENTIVE_ICONS: Record<IncentiveData['type'], typeof BadgeCheck> = {
+  federal: Landmark,
+  state: Building,
+  utility: Zap,
+  other: BadgeCheck,
+};
 
-function IncentiveRow({ name, amount, description }: IncentiveRowProps) {
+const INCENTIVE_COLORS: Record<IncentiveData['type'], string> = {
+  federal: 'bg-blue-500/10 text-blue-500',
+  state: 'bg-violet-500/10 text-violet-500',
+  utility: 'bg-amber-500/10 text-amber-500',
+  other: 'bg-emerald-500/10 text-emerald-500',
+};
+
+function IncentiveRow({ incentive }: { incentive: IncentiveData }) {
+  const Icon = INCENTIVE_ICONS[incentive.type];
+  const colorClass = INCENTIVE_COLORS[incentive.type];
+  
   return (
     <motion.div
       variants={itemVariants}
       className="flex items-center justify-between py-3 border-b border-border last:border-0"
     >
       <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10">
-          <BadgeCheck className="h-4 w-4 text-emerald-500" />
+        <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg', colorClass)}>
+          <Icon className="h-4 w-4" />
         </div>
         <div>
-          <p className="text-sm font-medium text-foreground">{name}</p>
-          <p className="text-xs text-muted-foreground">{description}</p>
+          <p className="text-sm font-medium text-foreground">{incentive.name}</p>
+          <p className="text-xs text-muted-foreground">{incentive.description}</p>
         </div>
       </div>
       <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
-        -{formatCurrency(amount)}
+        -{formatCurrency(incentive.amount)}
       </span>
     </motion.div>
   );
 }
 
-function PlaceholderChart({ title, description, height = 'h-48' }: { title: string; description: string; height?: string }) {
+const CATEGORY_ICONS: Record<EquipmentLineItem['category'], typeof Sun> = {
+  solar: Sun,
+  wind: Wind,
+  storage: Battery,
+  bos: Cable,
+  installation: Wrench,
+};
+
+const CATEGORY_COLORS: Record<EquipmentLineItem['category'], string> = {
+  solar: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  wind: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  storage: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  bos: 'bg-slate-500/10 text-slate-600 dark:text-slate-400',
+  installation: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+};
+
+const CATEGORY_LABELS: Record<EquipmentLineItem['category'], string> = {
+  solar: 'Solar Equipment',
+  wind: 'Wind Equipment',
+  storage: 'Energy Storage',
+  bos: 'Balance of System',
+  installation: 'Installation',
+};
+
+function EquipmentRow({ item }: { item: EquipmentLineItem }) {
+  const Icon = CATEGORY_ICONS[item.category];
+  const colorClass = CATEGORY_COLORS[item.category];
+  
   return (
-    <motion.div
-      variants={itemVariants}
-      className="rounded-xl border border-border bg-card overflow-hidden"
-    >
-      <div className="px-4 py-3 border-b border-border bg-muted/30">
-        <h3 className="text-sm font-medium text-foreground">{title}</h3>
-        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-      </div>
-      <div className={cn(
-        'flex items-center justify-center bg-muted/10',
-        height
-      )}>
-        <div className="text-center px-6">
-          <div className="flex justify-center mb-3">
-            <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center">
-              <TrendingUp className="h-6 w-6 text-muted-foreground/50" />
-            </div>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Charts will be implemented in Task 8.3
-          </p>
+    <div className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-0">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-md', colorClass)}>
+          <Icon className="h-3.5 w-3.5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
+          <p className="text-xs text-muted-foreground truncate">{item.model}</p>
         </div>
       </div>
-    </motion.div>
+      <div className="text-right shrink-0 ml-3">
+        <p className="text-sm font-semibold text-foreground tabular-nums">
+          ${item.totalPrice.toLocaleString()}
+        </p>
+        {item.quantity > 1 && (
+          <p className="text-xs text-muted-foreground">
+            {item.quantity} × ${item.unitPrice.toLocaleString()}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface EquipmentCategoryProps {
+  category: EquipmentLineItem['category'];
+  items: EquipmentLineItem[];
+  defaultExpanded?: boolean;
+}
+
+function EquipmentCategory({ category, items, defaultExpanded = false }: EquipmentCategoryProps) {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const Icon = CATEGORY_ICONS[category];
+  const colorClass = CATEGORY_COLORS[category];
+  const total = items.reduce((sum, item) => sum + item.totalPrice, 0);
+  
+  return (
+    <div className="border-b border-border last:border-0">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center justify-between w-full py-3 px-1 hover:bg-muted/30 transition-colors rounded-lg -mx-1"
+      >
+        <div className="flex items-center gap-3">
+          <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg', colorClass)}>
+            <Icon className="h-4 w-4" />
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-medium text-foreground">{CATEGORY_LABELS[category]}</p>
+            <p className="text-xs text-muted-foreground">{items.length} item{items.length !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-foreground tabular-nums">
+            ${total.toLocaleString()}
+          </span>
+          {isExpanded ? (
+            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          )}
+        </div>
+      </button>
+      
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="pb-3 pl-11">
+              {items.map((item) => (
+                <EquipmentRow key={item.id} item={item} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -143,7 +249,6 @@ export function FinancialTab({ plan, className }: FinancialTabProps) {
         annualSavings: 0,
         paybackYears: 0,
         roi25Year: 0,
-        incentives: [],
       };
     }
 
@@ -153,11 +258,31 @@ export function FinancialTab({ plan, className }: FinancialTabProps) {
       annualSavings: planFinancials.annualSavings,
       paybackYears: planFinancials.paybackYears,
       roi25Year: planFinancials.roi25Year,
-      incentives: planFinancials.incentives || [],
     };
   }, [planFinancials]);
 
-  const totalIncentives = financials.totalCost - financials.netCost;
+  const incentives = useMemo(() => generateIncentivesData(plan), [plan]);
+  const totalIncentives = useMemo(() => {
+    return incentives.reduce((sum, i) => sum + i.amount, 0);
+  }, [incentives]);
+
+  const equipment = useMemo(() => generateEquipmentData(plan), [plan]);
+  const equipmentByCategory = useMemo(() => {
+    const grouped: Record<EquipmentLineItem['category'], EquipmentLineItem[]> = {
+      solar: [],
+      wind: [],
+      storage: [],
+      bos: [],
+      installation: [],
+    };
+    equipment.forEach(item => {
+      grouped[item.category].push(item);
+    });
+    return grouped;
+  }, [equipment]);
+  const equipmentTotal = useMemo(() => {
+    return equipment.reduce((sum, item) => sum + item.totalPrice, 0);
+  }, [equipment]);
 
   return (
     <motion.div
@@ -216,14 +341,9 @@ export function FinancialTab({ plan, className }: FinancialTabProps) {
           </span>
         </div>
         <div className="px-4">
-          {financials.incentives.length > 0 ? (
-            financials.incentives.map((incentive, index) => (
-              <IncentiveRow
-                key={index}
-                name={incentive.name}
-                amount={incentive.amount}
-                description={incentive.description}
-              />
+          {incentives.length > 0 ? (
+            incentives.map((incentive, index) => (
+              <IncentiveRow key={index} incentive={incentive} />
             ))
           ) : (
             <div className="py-8 text-center">
@@ -236,17 +356,35 @@ export function FinancialTab({ plan, className }: FinancialTabProps) {
         </div>
       </motion.div>
 
-      <PlaceholderChart
-        title="25-Year Cash Flow Projection"
-        description="Cumulative savings over the system lifetime"
-        height="h-56"
-      />
+      <motion.div variants={itemVariants} className="rounded-xl border border-border bg-card">
+        <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-medium text-foreground">Equipment & Materials</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Detailed breakdown of system components
+            </p>
+          </div>
+          <span className="text-sm font-semibold text-foreground tabular-nums">
+            ${equipmentTotal.toLocaleString()}
+          </span>
+        </div>
+        <div className="px-4 py-2">
+          {(Object.keys(equipmentByCategory) as EquipmentLineItem['category'][])
+            .filter(category => equipmentByCategory[category].length > 0)
+            .map((category, index) => (
+              <EquipmentCategory
+                key={category}
+                category={category}
+                items={equipmentByCategory[category]}
+                defaultExpanded={index === 0}
+              />
+            ))}
+        </div>
+      </motion.div>
 
-      <PlaceholderChart
-        title="Cost Breakdown"
-        description="Equipment, installation, and other costs"
-        height="h-48"
-      />
+      <CashFlowChart plan={plan} />
+
+      <CostBreakdownChart plan={plan} />
 
       <motion.div
         variants={itemVariants}

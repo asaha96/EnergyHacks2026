@@ -1026,5 +1026,197 @@ const [showAnalytics, setShowAnalytics] = useState(false);
 
 ---
 
+#### Production Charts (Recharts)
+*From Task 8.2 - Date: Jan 24, 2026*
+
+**Files Created:**
+- `components/analytics/charts/chart-components.tsx` - Reusable ChartContainer, ChartTooltip, ChartLegend
+- `components/analytics/charts/production-data.ts` - Mock data generators for monthly/hourly production
+- `components/analytics/charts/monthly-production-chart.tsx` - BarChart for monthly production
+- `components/analytics/charts/daily-production-chart.tsx` - AreaChart for hourly profile
+- `components/analytics/charts/index.ts` - Barrel exports
+
+**Recharts Usage Pattern:**
+```tsx
+import {
+  BarChart, Bar, AreaChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine,
+} from 'recharts';
+
+// Always wrap in ResponsiveContainer for responsive sizing
+<ResponsiveContainer width="100%" height="100%">
+  <BarChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+    <CartesianGrid vertical={false} stroke="#e5e5e5" strokeDasharray="3 3" />
+    <XAxis dataKey="shortMonth" tick={{ fontSize: 11, fill: '#737373' }} />
+    <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+    <Tooltip content={<CustomTooltip />} />
+    <Bar dataKey="production" fill="#4bba6f" radius={[4, 4, 0, 0]} />
+  </BarChart>
+</ResponsiveContainer>
+```
+
+**Custom Tooltip Pattern:**
+```tsx
+function CustomTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border bg-card px-3 py-2 shadow-lg">
+      <p className="text-xs font-medium">{label}</p>
+      {payload.map((entry, i) => (
+        <div key={i} className="flex items-center gap-2 text-xs">
+          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
+          <span>{entry.name}: {entry.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+**Color Constants (hex required for SVG):**
+```tsx
+export const CHART_COLORS = {
+  primary: '#2d8555',
+  chart1: '#66c78a',
+  chart2: '#4bba6f',
+  amber: '#f59e0b',
+  muted: '#737373',
+  border: '#e5e5e5',
+};
+```
+
+**Gotchas:**
+- Recharts requires hex/rgb colors, not CSS variables (SVG rendering)
+- Use `ResponsiveContainer` with explicit parent height (min-h-[Xpx])
+- Negative left margin (-10) compensates for Y-axis label spacing
+- `radius` prop on Bar creates rounded corners: `[topLeft, topRight, bottomRight, bottomLeft]`
+- Use `type="monotone"` on Area for smooth curves
+
+**Mock Data Generation:**
+- Monthly: Uses seasonal factors (0.52 in Dec → 1.20 in June) with slight variance
+- Hourly: Bell curve peaking at noon (factor 1.0), zero at night
+
+---
+
+#### Environmental Impact Tab Enhancement
+*From Task 8.4 - Date: Jan 24, 2026*
+
+**Files Modified:**
+- `components/analytics/tabs/environmental-tab.tsx` - Complete redesign with animated counters
+
+**AnimatedCounter Component Pattern:**
+```tsx
+function AnimatedCounter({ 
+  value, 
+  decimals = 0,
+  suffix = '',
+  prefix = '',
+  className,
+}: { 
+  value: number; 
+  decimals?: number;
+  suffix?: string;
+  prefix?: string;
+  className?: string;
+}) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: '-50px' });
+  const spring = useSpring(0, { mass: 0.8, stiffness: 75, damping: 15 });
+  const display = useTransform(spring, (current) => {
+    const formatted = decimals > 0 
+      ? current.toFixed(decimals) 
+      : Math.round(current).toLocaleString();
+    return `${prefix}${formatted}${suffix}`;
+  });
+
+  useEffect(() => {
+    if (isInView) {
+      spring.set(value);
+    }
+  }, [isInView, spring, value]);
+
+  return <motion.span ref={ref} className={className}>{display}</motion.span>;
+}
+```
+
+**EPA Conversion Factors (for carbon equivalencies):**
+- Trees: `co2OffsetTons * 16.5` - Urban trees absorbing CO2 for 10 years
+- Cars: `co2OffsetTons / 4.6` - Average car emits 4.6 metric tons/year
+- Homes: `annualProductionKwh / 10500` - Average US home uses 10,500 kWh/year
+- Gasoline: `co2OffsetTons * 113` - 1 ton CO2 = ~113 gallons of gasoline
+
+**Visual Components:**
+- HeroStat: Large gradient cards with floating decorative icons and SVG dot patterns
+- EquivalencyCard: Interactive cards with hover scale effects and glow
+- MetricCard: Smaller secondary stats with gradient icon backgrounds
+
+**Gotchas:**
+- When using `useInView` with `useSpring`, the spring animation triggers on scroll into view
+- `useTransform` requires a formatting function that returns a string for display
+- `tabular-nums` class ensures consistent number widths during animation
+- Keep EPA conversion factor comments as they document magic numbers from scientific sources
+
+---
+
+#### Section Navigation Restructure
+*From Task 8.5 - Date: Jan 24, 2026*
+
+**Architecture Change:**
+Replaced overlay sidebar pattern with in-place content navigation. Sections (Production, Financial, Environmental) are now accessed via animated content transitions within the same panel, not as separate overlay drawers.
+
+**Files Created:**
+- `components/overview/plan-detail-panel.tsx` - Main container managing view state
+- `components/overview/section-cards.tsx` - Hero-style gradient cards for section previews
+
+**PlanDetailPanel Pattern:**
+```tsx
+type SectionType = 'production' | 'financial' | 'environmental';
+
+const [activeSection, setActiveSection] = useState<SectionType | null>(null);
+
+// Main view (null) shows MetricsGrid + SectionCards
+// Section view shows back button + section content
+```
+
+**Animation Pattern (Main ↔ Section transitions):**
+```tsx
+const mainViewVariants = {
+  enter: { opacity: 0, y: 40 },    // Enters from below
+  center: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: 40 },     // Exits downward
+};
+
+const sectionViewVariants = {
+  enter: { opacity: 0, y: -40 },   // Enters from above
+  center: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -40 },    // Exits upward
+};
+```
+
+**SectionCards Component:**
+- Uses animated counters (AnimatedNumber) for live value transitions
+- Gradient backgrounds matching section themes:
+  - Production: amber → orange → red
+  - Financial: emerald → teal → cyan
+  - Environmental: green → emerald → teal
+- Decorative SVG patterns and floating icons
+- Hover effects with scale and shadow
+
+**Equipment Breakdown in Financial Tab:**
+- Added `generateEquipmentData()` function in `financial-data.ts`
+- Creates mock equipment list based on plan's technologies and system size
+- Categories: Solar, Wind, Storage, BOS (Balance of System), Installation
+- Collapsible category sections with line item details
+- Uses `EquipmentCategory` and `EquipmentRow` sub-components
+
+**Key Learnings:**
+- `AnimatePresence mode="wait"` ensures exit animation completes before enter
+- Spring animations (damping: 25, stiffness: 200) feel natural for content transitions
+- Keep animation durations short (200-300ms) for responsive feel
+- Use `useMemo` to group equipment by category for efficient rendering
+
+---
+
 *Last Updated: Jan 24, 2026*
-*Last Task Completed: 8.1*
+*Last Task Completed: 8.5*
