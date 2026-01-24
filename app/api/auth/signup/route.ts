@@ -30,65 +30,53 @@ export async function POST(request: NextRequest) {
 
         const signupData = await signupResponse.json();
 
+        let isNewUser = true;
+
         if (!signupResponse.ok) {
             console.error('Signup error:', signupData);
 
             if (signupData.code === 'invalid_signup') {
-                let errorMessage = 'Invalid signup details';
-
                 const descString = typeof signupData.description === 'string' ? signupData.description : JSON.stringify(signupData.description || '');
 
                 if (descString.toLowerCase().includes('already exists')) {
-                    return NextResponse.json(
-                        { error: 'This account already exists' },
-                        { status: 409 }
-                    );
+                    // User exists, try to log them in
+                    isNewUser = false;
+                } else {
+                    // Real validation error
+                    let errorMessage = 'Invalid signup details';
+                    if (typeof signupData.description === 'string') {
+                        errorMessage = signupData.description;
+                    } else if (signupData.description && typeof signupData.description === 'object') {
+                        try {
+                            // @ts-ignore
+                            if (signupData.description.rules) {
+                                // @ts-ignore
+                                const rules = signupData.description.rules.map(r => r.message).join('. ');
+                                errorMessage = `Password requirements not met: ${rules}`;
+                            } else {
+                                errorMessage = JSON.stringify(signupData.description);
+                            }
+                        } catch (e) {
+                            errorMessage = 'Password requirements not met.';
+                        }
+                    } else if (signupData.message) {
+                        errorMessage = signupData.message;
+                    }
+                    return NextResponse.json({ error: errorMessage }, { status: 400 });
                 }
-
+            } else if (signupData.code === 'user_exists') {
+                // User exists, try to log them in
+                isNewUser = false;
+            } else {
+                // Other generic errors
+                let errorMessage = 'Failed to create account';
                 if (typeof signupData.description === 'string') {
                     errorMessage = signupData.description;
-                } else if (signupData.description && typeof signupData.description === 'object') {
-                    // It's likely a rules violation, let's try to extract a meaningful message or stringify it
-                    try {
-                        // @ts-ignore
-                        if (signupData.description.rules) {
-                            // @ts-ignore
-                            const rules = signupData.description.rules.map(r => r.message).join('. ');
-                            errorMessage = `Password requirements not met: ${rules}`;
-                        } else {
-                            errorMessage = JSON.stringify(signupData.description);
-                        }
-                    } catch (e) {
-                        errorMessage = 'Password requirements not met.';
-                    }
-                } else if (signupData.message) {
+                } else if (typeof signupData.message === 'string') {
                     errorMessage = signupData.message;
                 }
-
-                return NextResponse.json(
-                    { error: errorMessage },
-                    { status: 400 }
-                );
+                return NextResponse.json({ error: errorMessage }, { status: 400 });
             }
-
-            if (signupData.code === 'user_exists') {
-                return NextResponse.json(
-                    { error: 'This account already exists' },
-                    { status: 409 }
-                );
-            }
-
-            let errorMessage = 'Failed to create account';
-            if (typeof signupData.description === 'string') {
-                errorMessage = signupData.description;
-            } else if (typeof signupData.message === 'string') {
-                errorMessage = signupData.message;
-            }
-
-            return NextResponse.json(
-                { error: errorMessage },
-                { status: 400 }
-            );
         }
 
         // Now log the user in using ROPG
@@ -112,12 +100,22 @@ export async function POST(request: NextRequest) {
         const tokenData = await tokenResponse.json();
 
         if (!tokenResponse.ok) {
-            // User created but couldn't log in - still success
-            return NextResponse.json({
-                success: true,
-                message: 'Account created. Please log in.',
-                requiresLogin: true,
-            });
+            if (isNewUser) {
+                // User created but couldn't log in - still success
+                return NextResponse.json({
+                    success: true,
+                    message: 'Account created. Please log in.',
+                    requiresLogin: true,
+                });
+            } else {
+                // Existing user key failed to login (wrong password)
+                // Return original "Account exists" error to not reveal password validity, 
+                // or just say account exists.
+                return NextResponse.json(
+                    { error: 'This account already exists' },
+                    { status: 409 }
+                );
+            }
         }
 
         // Get user info
