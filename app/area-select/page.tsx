@@ -63,7 +63,6 @@ export default function AreaSelectPage() {
   // -- AGENT AUTH STATE --
   const [hasAgentConsent, setHasAgentConsent] = useState(false);
   const [isConsentModalOpen, setIsConsentModalOpen] = useState(false);
-  const [securityLogs, setSecurityLogs] = useState<LogEntry[]>([]);
   // ----------------------
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -671,46 +670,9 @@ export default function AreaSelectPage() {
     setIsAnalyzing(false);
   }, [addAgentMessage, updateAgentMessage, budget, primaryGoal, technologies, showOverlay, hideOverlay, clearAllOverlays, clearEquipment, prospectedArea, generateEquipmentPlacements, generateZoneLabels]);
 
-  const addSecurityLog = useCallback((message: string, type: LogEntry['type'], scope?: string) => {
-    setSecurityLogs(prev => [...prev, {
-      id: Math.random().toString(36),
-      timestamp: new Date().toLocaleTimeString(),
-      message,
-      type,
-      scope
-    }]);
-  }, []);
 
-  const handleAuthorizeAgent = useCallback((scopes: string[]) => {
-    setIsConsentModalOpen(false);
 
-    // Simulate secure handshake log sequence
-    addSecurityLog('User granted permission', 'success');
 
-    setTimeout(() => {
-      addSecurityLog('Minting delegated access token...', 'info');
-    }, 400);
-
-    setTimeout(() => {
-      addSecurityLog('Connecting to UtilityAPI (Simulated)...', 'info', 'read:utility_usage');
-    }, 800);
-
-    setTimeout(() => {
-      addSecurityLog('Fetching 12-month interval data...', 'success');
-    }, 1500);
-
-    setTimeout(() => {
-      addSecurityLog('Token exchange successful', 'success', 'read:finance');
-      setHasAgentConsent(true);
-      // Start analysis with the "Secure Token"
-      runAnalysis();
-    }, 2200);
-  }, [addSecurityLog, runAnalysis]);
-
-  const handleDenyAgent = useCallback(() => {
-    setIsConsentModalOpen(false);
-    addSecurityLog('Authorization denied by user', 'error');
-  }, [addSecurityLog]);
 
   const summaryMessageRef = useRef<string | null>(null);
 
@@ -742,13 +704,8 @@ export default function AreaSelectPage() {
   const handleAnalyze = useCallback(() => {
     if (!validation.canProceed) return;
 
-    // PRIVACY-FIRST AI CHECK
-    // If we don't have consent, we block the analysis and ask for permission.
-    if (!hasAgentConsent) {
-      addSecurityLog('Agent blocked: Insufficient permissions', 'waring');
-      setIsConsentModalOpen(true);
-      return;
-    }
+    // PRIVACY-FIRST AI CHECK - REMOVED for Late Consent Flow
+    // We now allow analysis to run freely. Consent is requested at Save.
 
     // Close constraints, open agent sidebar
     setIsConstraintsSidebarOpen(false);
@@ -758,7 +715,7 @@ export default function AreaSelectPage() {
     setTimeout(() => {
       runAnalysis();
     }, 400);
-  }, [validation.canProceed, runAnalysis, hasAgentConsent, addSecurityLog]);
+  }, [validation.canProceed, runAnalysis, hasAgentConsent]);
 
   const handleStopAnalysis = useCallback(() => {
     setIsAnalyzing(false);
@@ -791,8 +748,16 @@ export default function AreaSelectPage() {
     };
   }, [budget]);
 
-  const handleSavePlan = useCallback(async () => {
+  const handleSavePlan = useCallback(async (force = false) => {
     if (!prospectedArea) return;
+
+    // --- LATE CONSENT CHECK ---
+    // If not yet consented and not forced, ask for permission now.
+    if (!hasAgentConsent && !force) {
+      setIsConsentModalOpen(true);
+      return;
+    }
+    // --------------------------
 
     setIsSavingPlan(true);
 
@@ -850,6 +815,63 @@ export default function AreaSelectPage() {
     setIsSavingPlan(false);
     router.push(`/overview/${newPlan.id}`);
   }, [prospectedArea, getAnalysisValues, locationName, draftConstraints, equipmentPlacements, addPlan, setDraftArea, router]);
+
+  const handleAuthorizeAgent = useCallback((scopes: string[]) => {
+    setIsConsentModalOpen(false);
+
+    // Use the NATIVE Agent Chat UI for feedback
+    setIsAgentSidebarOpen(true);
+
+    const sequence = async () => {
+      const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+      // 1. Grant
+      addAgentMessage('success', 'Permission granted', { detail: 'Authorized read:utility_usage' });
+      await delay(800);
+
+      // 2. Connect
+      const id1 = addAgentMessage('thinking', 'Connecting to UtilityAPI...', { status: 'active' });
+      await delay(1200);
+      updateAgentMessage(id1, {
+        status: 'completed',
+        text: 'Connected to PG&E',
+        resolvedType: 'success',
+        detail: 'Secure connection established'
+      });
+
+      await delay(600);
+
+      // 3. Fetch
+      const id2 = addAgentMessage('thinking', 'Verifying 12-month usage history...', { status: 'active' });
+      await delay(1500);
+      updateAgentMessage(id2, {
+        status: 'completed',
+        text: 'Usage data verified',
+        resolvedType: 'data',
+        value: '4.2 kWh Peak Alleviation',
+        detail: 'Actual usage is 15% lower than estimated'
+      });
+
+      await delay(600);
+
+      // 4. Update Plan Data (Simulated)
+      setHasAgentConsent(true);
+      addAgentMessage('success', 'Plan verified with utility data');
+
+      await delay(800);
+
+      // 5. Proceed to Save
+      handleSavePlan(true); // authorized=true
+    };
+
+    sequence();
+  }, [addAgentMessage, updateAgentMessage, handleSavePlan]);
+
+  const handleDenyAgent = useCallback(() => {
+    setIsConsentModalOpen(false);
+    addAgentMessage('error', 'Verification skipped', { detail: 'Saving with estimated data' });
+    handleSavePlan(true); // Proceed without verification
+  }, [addAgentMessage, handleSavePlan]);
 
   const handleStartOver = useCallback(() => {
     setVisibleOverlays(new Set());
@@ -1224,15 +1246,7 @@ export default function AreaSelectPage() {
       />
 
       {/* Security Log Visualizer for Hackathon Demo */}
-      {securityLogs.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-4 left-4 z-[60] w-[400px]"
-        >
-          <SecurityLog logs={securityLogs} />
-        </motion.div>
-      )}
+      {/* Security Log Visualizer for Hackathon Demo - REMOVED for Native UI */}
     </div>
   );
 }
