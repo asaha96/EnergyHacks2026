@@ -817,7 +817,7 @@ function sampleTerrainHeight(terrainData: Float32Array, resolution: number, x: n
   const v = clampNumber((-z + TERRAIN_HALF) / TERRAIN_SIZE, 0, 1);
 
   const gx = u * (resolution - 1);
-  const gy = v * (resolution - 1);
+  const gy = (1 - v) * (resolution - 1);
   const x0 = Math.floor(gx);
   const y0 = Math.floor(gy);
   const x1 = Math.min(x0 + 1, resolution - 1);
