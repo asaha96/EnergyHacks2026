@@ -11,6 +11,7 @@ import { TerrainOverlay, SolarOverlay, WindOverlay, ExclusionOverlay, OptimalOve
 import { ConstraintsSidebar, FinancialConstraints, EnergyConstraints, LandConstraints, TechnicalConstraints, TimelineConstraints } from '@/components/constraints';
 import { AgentSidebar, type AnalysisPhase, type AgentMessageData, type AgentMessageType } from '@/components/agent';
 import { AgentConsentModal } from '@/components/agent/agent-consent-modal';
+import type { TerrainHeightmap } from '@/components/3d/terrain-analysis-scene';
 
 import { Button } from '@/components/ui/button';
 import { calculateAreaWithUnits, formatArea, calculateCentroid } from '@/lib/geo';
@@ -101,6 +102,7 @@ export default function AreaSelectPage() {
   const [show3DView, setShow3DView] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [isTransitioningTo3D, setIsTransitioningTo3D] = useState(false);
+  const [terrainHeightmap, setTerrainHeightmap] = useState<TerrainHeightmap | null>(null);
   // -------------------------------
 
   const { draftConstraints, updateDraftConstraints, addPlan, setDraftArea } = usePlanStore();
@@ -469,6 +471,47 @@ export default function AreaSelectPage() {
     setZoneLabels([]);
   }, []);
 
+  const generateTerrainFromGemini = useCallback(async (polygon: PolygonCoordinates[]) => {
+    setTerrainHeightmap(null);
+    const messageId = addAgentMessage('thinking', 'Sending map snapshot to Gemini 3...', { status: 'active' });
+
+    try {
+      const response = await fetch('/api/gemini/terrain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          polygon,
+          locationName,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Gemini terrain request failed');
+      }
+
+      const payload = await response.json();
+      if (!payload?.heightmap?.data?.length) {
+        throw new Error('Gemini returned no heightmap');
+      }
+
+      setTerrainHeightmap(payload.heightmap as TerrainHeightmap);
+      updateAgentMessage(messageId, {
+        status: 'completed',
+        text: 'Gemini 3 terrain model ready',
+        resolvedType: 'success',
+        detail: `${payload.heightmap.width}x${payload.heightmap.height} elevation grid`,
+      });
+    } catch (error) {
+      setTerrainHeightmap(null);
+      updateAgentMessage(messageId, {
+        status: 'completed',
+        text: 'Gemini terrain model fallback in use',
+        resolvedType: 'error',
+        detail: 'Using procedural terrain surface',
+      });
+    }
+  }, [addAgentMessage, locationName, updateAgentMessage]);
+
   const runAnalysis = useCallback(async () => {
     setIsAnalyzing(true);
     setAgentMessages([]);
@@ -476,6 +519,10 @@ export default function AreaSelectPage() {
     setAnalysisProgress(0);
     clearAllOverlays();
     clearEquipment();
+
+    if (prospectedArea) {
+      void generateTerrainFromGemini(prospectedArea);
+    }
 
     const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -707,7 +754,7 @@ export default function AreaSelectPage() {
     }]);
 
     setIsAnalyzing(false);
-  }, [addAgentMessage, updateAgentMessage, budget, primaryGoal, technologies, showOverlay, hideOverlay, clearAllOverlays, clearEquipment, prospectedArea, generateEquipmentPlacements, generateZoneLabels]);
+  }, [addAgentMessage, updateAgentMessage, budget, primaryGoal, technologies, showOverlay, hideOverlay, clearAllOverlays, clearEquipment, prospectedArea, generateEquipmentPlacements, generateZoneLabels, generateTerrainFromGemini]);
 
 
 
@@ -971,6 +1018,7 @@ export default function AreaSelectPage() {
     setShow3DView(false);
     setIsTransitioningTo3D(false);
     setAnalysisProgress(0);
+    setTerrainHeightmap(null);
     summaryMessageRef.current = null;
   }, []);
 
@@ -1023,11 +1071,13 @@ export default function AreaSelectPage() {
   const handleStartProspecting = useCallback(() => {
     setIsProspecting(true);
     setProspectedArea(null);
+    setTerrainHeightmap(null);
   }, []);
 
   const handleProspectComplete = useCallback((coords: PolygonCoordinates[]) => {
     setProspectedArea(coords);
     setIsProspecting(false);
+    setTerrainHeightmap(null);
   }, []);
 
   const handleProspectCancel = useCallback(() => {
@@ -1161,6 +1211,7 @@ export default function AreaSelectPage() {
         phase={currentPhase}
         progress={analysisProgress}
         isVisible={show3DView}
+        heightmap={terrainHeightmap}
       />
 
       {show3DView && (
