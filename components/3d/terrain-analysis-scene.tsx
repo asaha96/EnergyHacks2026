@@ -18,8 +18,410 @@ const TERRAIN_RESOLUTION = 128;
 const TERRAIN_SIZE = 10;
 const TERRAIN_HALF = TERRAIN_SIZE / 2;
 const TERRAIN_BASE_Y = -0.5;
-const TERRAIN_ELEVATION_SCALE = 1.5;
-const PLACEMENT_BOUND = TERRAIN_HALF * 0.92;
+const TERRAIN_ELEVATION_SCALE = 0.8;
+const PLACEMENT_BOUND = TERRAIN_HALF * 0.90;
+
+type NormalizedPolygon = Array<{ x: number; z: number }>;
+
+function normalizePolygonTo3D(polygon: PolygonCoordinates[]): {
+  normalized: NormalizedPolygon;
+  bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number };
+  scaleX: number;
+  scaleZ: number;
+} {
+  if (!polygon || polygon.length < 3) {
+    return {
+      normalized: [
+        { x: -TERRAIN_HALF, z: -TERRAIN_HALF },
+        { x: TERRAIN_HALF, z: -TERRAIN_HALF },
+        { x: TERRAIN_HALF, z: TERRAIN_HALF },
+        { x: -TERRAIN_HALF, z: TERRAIN_HALF },
+      ],
+      bounds: { minLat: 0, maxLat: 1, minLng: 0, maxLng: 1 },
+      scaleX: TERRAIN_SIZE,
+      scaleZ: TERRAIN_SIZE,
+    };
+  }
+
+  const minLat = Math.min(...polygon.map(p => p.lat));
+  const maxLat = Math.max(...polygon.map(p => p.lat));
+  const minLng = Math.min(...polygon.map(p => p.lng));
+  const maxLng = Math.max(...polygon.map(p => p.lng));
+
+  const latRange = maxLat - minLat || 0.0001;
+  const lngRange = maxLng - minLng || 0.0001;
+  const aspectRatio = lngRange / latRange;
+
+  const scaleX = aspectRatio >= 1 ? TERRAIN_SIZE : TERRAIN_SIZE * aspectRatio;
+  const scaleZ = aspectRatio >= 1 ? TERRAIN_SIZE / aspectRatio : TERRAIN_SIZE;
+
+  const normalized = polygon.map(p => ({
+    x: ((p.lng - minLng) / lngRange - 0.5) * scaleX,
+    z: -((p.lat - minLat) / latRange - 0.5) * scaleZ,
+  }));
+
+  return { normalized, bounds: { minLat, maxLat, minLng, maxLng }, scaleX, scaleZ };
+}
+
+function isPointInPolygon(x: number, y: number, polygon: NormalizedPolygon): boolean {
+  let inside = false;
+  const n = polygon.length;
+  
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].z;
+    const xj = polygon[j].x, yj = polygon[j].z;
+    
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  
+  return inside;
+}
+
+function distanceToPolygonEdge(x: number, y: number, polygon: NormalizedPolygon): number {
+  let minDist = Infinity;
+  const n = polygon.length;
+  
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const x1 = polygon[i].x, y1 = polygon[i].z;
+    const x2 = polygon[j].x, y2 = polygon[j].z;
+    
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len2 = dx * dx + dy * dy;
+    
+    let t = 0;
+    if (len2 > 0) {
+      t = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / len2));
+    }
+    
+    const projX = x1 + t * dx;
+    const projY = y1 + t * dy;
+    const dist = Math.sqrt((x - projX) * (x - projX) + (y - projY) * (y - projY));
+    
+    minDist = Math.min(minDist, dist);
+  }
+  
+  return minDist;
+}
+
+function createPolygonTerrainGeometry(
+  normalizedPolygon: NormalizedPolygon,
+  terrainData: Float32Array,
+  resolution: number,
+  scaleX: number,
+  scaleZ: number
+): THREE.BufferGeometry {
+  const geo = new THREE.PlaneGeometry(scaleX, scaleZ, resolution - 1, resolution - 1);
+  const positions = geo.attributes.position.array as Float32Array;
+  const uvs = geo.attributes.uv.array as Float32Array;
+
+  const alphas = new Float32Array(positions.length / 3);
+  const edgeDistances = new Float32Array(positions.length / 3);
+
+  for (let i = 0; i < positions.length / 3; i++) {
+    const x = positions[i * 3];
+    const y = positions[i * 3 + 1];
+    
+    const u = uvs[i * 2];
+    const v = uvs[i * 2 + 1];
+
+    const gx = Math.floor(u * (resolution - 1));
+    const gy = Math.floor((1 - v) * (resolution - 1));
+    const clampedGx = Math.max(0, Math.min(resolution - 1, gx));
+    const clampedGy = Math.max(0, Math.min(resolution - 1, gy));
+    const elevation = terrainData[clampedGy * resolution + clampedGx] || 0;
+
+    positions[i * 3 + 2] = elevation * TERRAIN_ELEVATION_SCALE;
+
+    const worldZ = -y;
+    const inPolygon = isPointInPolygon(x, worldZ, normalizedPolygon);
+    const edgeDist = distanceToPolygonEdge(x, worldZ, normalizedPolygon);
+    const signedDist = inPolygon ? edgeDist : -edgeDist;
+    
+    edgeDistances[i] = signedDist;
+    alphas[i] = 1.0;
+  }
+
+  geo.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
+  geo.setAttribute('edgeDist', new THREE.BufferAttribute(edgeDistances, 1));
+  geo.computeVertexNormals();
+
+  return geo;
+}
+
+const CROSS_SECTION_DEPTH = 1.5;
+
+function sampleTerrainHeightAt(
+  terrainData: Float32Array,
+  resolution: number,
+  x: number,
+  z: number,
+  scaleX: number,
+  scaleZ: number
+): number {
+  const u = (x / scaleX + 0.5);
+  const v = (-z / scaleZ + 0.5);
+  
+  const gx = u * (resolution - 1);
+  const gy = (1 - v) * (resolution - 1);
+  
+  const x0 = Math.floor(gx);
+  const y0 = Math.floor(gy);
+  const x1 = Math.min(x0 + 1, resolution - 1);
+  const y1 = Math.min(y0 + 1, resolution - 1);
+  
+  const tx = gx - x0;
+  const ty = gy - y0;
+  
+  const clampX0 = Math.max(0, Math.min(resolution - 1, x0));
+  const clampY0 = Math.max(0, Math.min(resolution - 1, y0));
+  const clampX1 = Math.max(0, Math.min(resolution - 1, x1));
+  const clampY1 = Math.max(0, Math.min(resolution - 1, y1));
+  
+  const h00 = terrainData[clampY0 * resolution + clampX0] || 0;
+  const h10 = terrainData[clampY0 * resolution + clampX1] || 0;
+  const h01 = terrainData[clampY1 * resolution + clampX0] || 0;
+  const h11 = terrainData[clampY1 * resolution + clampX1] || 0;
+  
+  const hx0 = h00 + (h10 - h00) * tx;
+  const hx1 = h01 + (h11 - h01) * tx;
+  
+  return hx0 + (hx1 - hx0) * ty;
+}
+
+function TerrainCrossSection({
+  polygon,
+  terrainData,
+  resolution,
+  revealProgress,
+}: {
+  polygon: PolygonCoordinates[] | null | undefined;
+  terrainData: Float32Array;
+  resolution: number;
+  revealProgress: number;
+}) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const materialRef = useRef<THREE.ShaderMaterial>(null);
+  
+  const { geometry, scaleX, scaleZ } = useMemo(() => {
+    if (!polygon || polygon.length < 3) {
+      return { geometry: null, scaleX: TERRAIN_SIZE, scaleZ: TERRAIN_SIZE };
+    }
+    
+    const { normalized, scaleX, scaleZ } = normalizePolygonTo3D(polygon);
+    const segmentsPerEdge = 48;
+    
+    const vertices: number[] = [];
+    const uvs: number[] = [];
+    const baseElevations: number[] = [];
+    const indices: number[] = [];
+    
+    let vertexIndex = 0;
+    
+    for (let i = 0; i < normalized.length; i++) {
+      const p1 = normalized[i];
+      const p2 = normalized[(i + 1) % normalized.length];
+      
+      for (let j = 0; j < segmentsPerEdge; j++) {
+        const t1 = j / segmentsPerEdge;
+        const t2 = (j + 1) / segmentsPerEdge;
+        
+        const x1 = p1.x + (p2.x - p1.x) * t1;
+        const z1 = p1.z + (p2.z - p1.z) * t1;
+        const x2 = p1.x + (p2.x - p1.x) * t2;
+        const z2 = p1.z + (p2.z - p1.z) * t2;
+        
+        const elev1 = sampleTerrainHeightAt(terrainData, resolution, x1, z1, scaleX, scaleZ);
+        const elev2 = sampleTerrainHeightAt(terrainData, resolution, x2, z2, scaleX, scaleZ);
+        
+        const uCoord1 = (i + t1) / normalized.length;
+        const uCoord2 = (i + t2) / normalized.length;
+        
+        vertices.push(
+          x1, elev1, z1,
+          x2, elev2, z2,
+          x1, 0, z1,
+          x2, 0, z2
+        );
+        
+        baseElevations.push(elev1, elev2, elev1, elev2);
+        
+        uvs.push(
+          uCoord1, 1.0,
+          uCoord2, 1.0,
+          uCoord1, 0.0,
+          uCoord2, 0.0
+        );
+        
+        indices.push(
+          vertexIndex, vertexIndex + 2, vertexIndex + 1,
+          vertexIndex + 1, vertexIndex + 2, vertexIndex + 3
+        );
+        
+        vertexIndex += 4;
+      }
+    }
+    
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setAttribute('baseElev', new THREE.Float32BufferAttribute(baseElevations, 1));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    
+    return { geometry: geo, scaleX, scaleZ };
+  }, [polygon, terrainData, resolution]);
+  
+  const shaderMaterial = useMemo(() => {
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uRevealProgress: { value: 0 },
+        uElevationScale: { value: 0 },
+        uBaseY: { value: TERRAIN_BASE_Y },
+        uDepth: { value: CROSS_SECTION_DEPTH },
+      },
+      vertexShader: `
+        attribute float baseElev;
+        
+        uniform float uElevationScale;
+        uniform float uBaseY;
+        uniform float uDepth;
+        
+        varying vec2 vUv;
+        varying vec3 vPosition;
+        varying vec3 vNormal;
+        varying float vDepth;
+        
+        void main() {
+          vUv = uv;
+          vNormal = normalize(normalMatrix * normal);
+          
+          float isTop = uv.y;
+          float scaledElev = baseElev * uElevationScale * 0.8;
+          float topY = uBaseY + scaledElev;
+          float bottomY = uBaseY - uDepth;
+          
+          float finalY = mix(bottomY, topY, isTop);
+          vec3 newPosition = vec3(position.x, finalY, position.z);
+          
+          vPosition = newPosition;
+          vDepth = 1.0 - uv.y;
+          
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform float uRevealProgress;
+        
+        varying vec2 vUv;
+        varying vec3 vPosition;
+        varying vec3 vNormal;
+        varying float vDepth;
+        
+        float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+        
+        float noise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          
+          float a = hash(i);
+          float b = hash(i + vec2(1.0, 0.0));
+          float c = hash(i + vec2(0.0, 1.0));
+          float d = hash(i + vec2(1.0, 1.0));
+          
+          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+        }
+        
+        void main() {
+          vec3 topsoil = vec3(0.35, 0.25, 0.15);
+          vec3 darkSoil = vec3(0.25, 0.18, 0.12);
+          vec3 clay = vec3(0.55, 0.35, 0.25);
+          vec3 sandstone = vec3(0.76, 0.60, 0.42);
+          vec3 limestone = vec3(0.85, 0.82, 0.75);
+          vec3 shale = vec3(0.40, 0.38, 0.35);
+          vec3 bedrock = vec3(0.30, 0.28, 0.26);
+          
+          float depth = vDepth;
+          
+          float layerNoise = noise(vec2(vUv.x * 20.0, depth * 3.0)) * 0.15;
+          float wavyDepth = depth + sin(vUv.x * 25.0 + depth * 5.0) * 0.03 + layerNoise;
+          
+          vec3 layerColor;
+          float layerBlend;
+          
+          if (wavyDepth < 0.08) {
+            layerBlend = wavyDepth / 0.08;
+            layerColor = mix(topsoil, darkSoil, layerBlend);
+          } else if (wavyDepth < 0.2) {
+            layerBlend = (wavyDepth - 0.08) / 0.12;
+            layerColor = mix(darkSoil, clay, layerBlend);
+          } else if (wavyDepth < 0.4) {
+            layerBlend = (wavyDepth - 0.2) / 0.2;
+            layerColor = mix(clay, sandstone, layerBlend);
+          } else if (wavyDepth < 0.6) {
+            layerBlend = (wavyDepth - 0.4) / 0.2;
+            layerColor = mix(sandstone, limestone, layerBlend);
+          } else if (wavyDepth < 0.8) {
+            layerBlend = (wavyDepth - 0.6) / 0.2;
+            layerColor = mix(limestone, shale, layerBlend);
+          } else {
+            layerBlend = (wavyDepth - 0.8) / 0.2;
+            layerColor = mix(shale, bedrock, layerBlend);
+          }
+          
+          float grainNoise = noise(vUv * 80.0) * 0.08;
+          float mediumNoise = noise(vUv * 30.0) * 0.05;
+          layerColor += vec3(grainNoise + mediumNoise) - 0.06;
+          
+          float strataNoise = noise(vec2(vUv.x * 50.0, depth * 8.0));
+          float strataLine = smoothstep(0.48, 0.5, strataNoise) * smoothstep(0.52, 0.5, strataNoise);
+          layerColor = mix(layerColor, layerColor * 0.85, strataLine * 0.5);
+          
+          vec3 lightDir = normalize(vec3(0.3, 0.5, 0.4));
+          float diffuse = max(dot(vNormal, lightDir), 0.0) * 0.4 + 0.6;
+          layerColor *= diffuse;
+          
+          float alpha = smoothstep(0.0, 0.3, uRevealProgress);
+          
+          gl_FragColor = vec4(layerColor, alpha);
+        }
+      `,
+      transparent: true,
+      side: THREE.DoubleSide,
+    });
+  }, []);
+  
+  useFrame((state) => {
+    if (materialRef.current) {
+      materialRef.current.uniforms.uTime.value = state.clock.elapsedTime;
+      materialRef.current.uniforms.uRevealProgress.value = revealProgress;
+      
+      const targetScale = Math.min(revealProgress * 2, 1);
+      materialRef.current.uniforms.uElevationScale.value = THREE.MathUtils.lerp(
+        materialRef.current.uniforms.uElevationScale.value,
+        targetScale,
+        0.05
+      );
+    }
+  });
+  
+  if (!geometry) return null;
+  
+  return (
+    <mesh ref={meshRef} geometry={geometry}>
+      <primitive object={shaderMaterial} ref={materialRef} attach="material" />
+    </mesh>
+  );
+}
+
+
 
 type SolarPlacement = {
   x: number;
@@ -82,12 +484,6 @@ function generateTerrainData(width: number, height: number, seed: number = 42) {
       elevation += smoothNoise(x, y, 16) * 0.5;
       elevation += smoothNoise(x, y, 8) * 0.25;
       elevation += smoothNoise(x, y, 4) * 0.125;
-
-      const cx = x - width / 2;
-      const cy = y - height / 2;
-      // const distFromCenter = Math.sqrt(cx * cx + cy * cy) / (width / 2);
-      // elevation += Math.max(0, 1 - distFromCenter * 1.2) * 0.5;
-      elevation += Math.sin(x * 0.05) * Math.cos(y * 0.07) * 0.3;
 
       data[y * width + x] = elevation;
     }
@@ -166,7 +562,6 @@ function buildTerrainHeightmap(realElevationData: Float32Array | null, resolutio
     }
 
     const range = maxElev - minElev || 1;
-    const noiseData = generateTerrainData(resolution, resolution, 123);
 
     for (let y = 0; y < resolution; y++) {
       for (let x = 0; x < resolution; x++) {
@@ -174,7 +569,6 @@ function buildTerrainHeightmap(realElevationData: Float32Array | null, resolutio
         const gy = (y / (resolution - 1)) * (gridSize - 1);
         let elev = bicubicInterpolate(realElevationData, gridSize, gx, gy);
         elev = ((elev - minElev) / range) * 2.0;
-        elev += noiseData[y * resolution + x] * 0.15;
         data[y * resolution + x] = elev;
       }
     }
@@ -319,37 +713,48 @@ function normalizePlacementPlan(raw: Partial<PlacementPlan>, fallback: Placement
   return { solar, wind, markers };
 }
 
-// Enhanced terrain mesh with progressive detail and lush green colors
 function TerrainMesh({
   phase,
   progress,
   revealProgress,
-  terrainData
+  terrainData,
+  polygon,
 }: {
   phase: AnalysisPhase;
   progress: number;
   revealProgress: number;
   terrainData: Float32Array;
+  polygon?: PolygonCoordinates[] | null;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.ShaderMaterial>(null);
 
   const resolution = TERRAIN_RESOLUTION;
 
-  const geometry = useMemo(() => {
+  const geometryData = useMemo(() => {
+    const { normalized, scaleX, scaleZ } = normalizePolygonTo3D(polygon || []);
+    
+    if (polygon && polygon.length >= 3) {
+      return createPolygonTerrainGeometry(normalized, terrainData, resolution, scaleX, scaleZ);
+    }
+    
     const geo = new THREE.PlaneGeometry(10, 10, resolution - 1, resolution - 1);
     const positions = geo.attributes.position.array as Float32Array;
-
+    const vertexCount = positions.length / 3;
+    const alphas = new Float32Array(vertexCount).fill(1.0);
+    const edgeDistances = new Float32Array(vertexCount).fill(1.0);
+    
     for (let i = 0; i < terrainData.length; i++) {
       const elevation = terrainData[i];
       positions[i * 3 + 2] = elevation * TERRAIN_ELEVATION_SCALE;
     }
-
+    
+    geo.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
+    geo.setAttribute('edgeDist', new THREE.BufferAttribute(edgeDistances, 1));
     geo.computeVertexNormals();
     return geo;
-  }, [terrainData]);
+  }, [terrainData, polygon, resolution]);
 
-  // Beautiful lush green shader with progressive reveal
   const shaderMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
       uniforms: {
@@ -361,6 +766,9 @@ function TerrainMesh({
         uElevationScale: { value: 0 },
       },
       vertexShader: `
+        attribute float alpha;
+        attribute float edgeDist;
+        
         uniform float uRevealProgress;
         uniform float uElevationScale;
         
@@ -369,11 +777,14 @@ function TerrainMesh({
         varying vec3 vNormal;
         varying float vElevation;
         varying float vReveal;
+        varying float vAlpha;
+        varying float vEdgeDist;
         
         void main() {
           vUv = uv;
+          vAlpha = alpha;
+          vEdgeDist = edgeDist;
           
-          // Progressive elevation reveal - terrain rises from flat
           float targetZ = position.z;
           float revealedZ = targetZ * uElevationScale;
           
@@ -381,7 +792,6 @@ function TerrainMesh({
           vPosition = newPosition;
           vElevation = targetZ;
           
-          // Calculate reveal based on distance from center
           float distFromCenter = length(uv - 0.5) * 2.0;
           vReveal = smoothstep(distFromCenter, distFromCenter + 0.3, uRevealProgress * 1.5);
           
@@ -401,41 +811,37 @@ function TerrainMesh({
         varying vec3 vNormal;
         varying float vElevation;
         varying float vReveal;
+        varying float vAlpha;
+        varying float vEdgeDist;
         
-        // Lush green color palette
-        vec3 deepForest = vec3(0.05, 0.22, 0.12);
-        vec3 forestGreen = vec3(0.13, 0.35, 0.18);
-        vec3 grassGreen = vec3(0.22, 0.50, 0.22);
-        vec3 limeGreen = vec3(0.35, 0.62, 0.28);
-        vec3 paleGreen = vec3(0.55, 0.75, 0.42);
-        vec3 sunlitGreen = vec3(0.68, 0.82, 0.45);
-        vec3 peakColor = vec3(0.75, 0.72, 0.58);
+        vec3 meadowBase = vec3(0.28, 0.45, 0.25);
+        vec3 grassLight = vec3(0.38, 0.55, 0.30);
+        vec3 grassMid = vec3(0.45, 0.58, 0.32);
+        vec3 hillGreen = vec3(0.42, 0.52, 0.30);
+        vec3 highGrass = vec3(0.48, 0.54, 0.34);
         
-        // Solar golden overlay
         vec3 solarGold = vec3(1.0, 0.85, 0.25);
         vec3 energyBlue = vec3(0.2, 0.7, 1.0);
         
         void main() {
-          // Normalize elevation for color mapping
-          float t = clamp(vElevation / 2.0, 0.0, 1.0);
-          
-          // Create rich green gradient based on elevation
-          vec3 terrainColor;
-          if (t < 0.15) {
-            terrainColor = mix(deepForest, forestGreen, t / 0.15);
-          } else if (t < 0.3) {
-            terrainColor = mix(forestGreen, grassGreen, (t - 0.15) / 0.15);
-          } else if (t < 0.5) {
-            terrainColor = mix(grassGreen, limeGreen, (t - 0.3) / 0.2);
-          } else if (t < 0.7) {
-            terrainColor = mix(limeGreen, paleGreen, (t - 0.5) / 0.2);
-          } else if (t < 0.85) {
-            terrainColor = mix(paleGreen, sunlitGreen, (t - 0.7) / 0.15);
-          } else {
-            terrainColor = mix(sunlitGreen, peakColor, (t - 0.85) / 0.15);
+          float edgeAA = smoothstep(-0.05, 0.05, vEdgeDist);
+          if (edgeAA < 0.01) {
+            discard;
           }
           
-          // Enhanced lighting with warm sun
+          float t = clamp(vElevation / 0.8, 0.0, 1.0);
+          
+          vec3 terrainColor;
+          if (t < 0.25) {
+            terrainColor = mix(meadowBase, grassLight, t / 0.25);
+          } else if (t < 0.5) {
+            terrainColor = mix(grassLight, grassMid, (t - 0.25) / 0.25);
+          } else if (t < 0.75) {
+            terrainColor = mix(grassMid, hillGreen, (t - 0.5) / 0.25);
+          } else {
+            terrainColor = mix(hillGreen, highGrass, (t - 0.75) / 0.25);
+          }
+          
           vec3 sunDir = normalize(vec3(0.4, 0.3, 1.0));
           vec3 skyDir = normalize(vec3(-0.2, 0.5, 0.8));
           
@@ -443,7 +849,6 @@ function TerrainMesh({
           float skyDiffuse = max(dot(vNormal, skyDir), 0.0) * 0.3;
           float ambient = 0.25;
           
-          // Warm sunlight tint
           vec3 sunColor = vec3(1.0, 0.95, 0.85);
           vec3 skyColor = vec3(0.6, 0.8, 1.0);
           
@@ -451,18 +856,15 @@ function TerrainMesh({
           litColor += terrainColor * sunDiffuse * 0.65 * sunColor;
           litColor += terrainColor * skyDiffuse * skyColor;
           
-          // Rim lighting for depth
           float rimLight = 1.0 - max(dot(vNormal, vec3(0.0, 0.0, 1.0)), 0.0);
           rimLight = pow(rimLight, 3.0) * 0.3;
           litColor += vec3(0.4, 0.7, 0.5) * rimLight;
           
-          // Scanning effect during reveal
           float scanY = mod(uTime * 0.4, 1.4);
           float scanEffect = smoothstep(scanY - 0.15, scanY, vUv.y) * 
                             (1.0 - smoothstep(scanY, scanY + 0.03, vUv.y));
           litColor += energyBlue * scanEffect * 1.5 * (1.0 - uProgress);
           
-          // Grid overlay - subtle and elegant
           float gridScale = 25.0;
           float gridX = abs(fract(vUv.x * gridScale - 0.5) - 0.5) / fwidth(vUv.x * gridScale);
           float gridY = abs(fract(vUv.y * gridScale - 0.5) - 0.5) / fwidth(vUv.y * gridScale);
@@ -471,10 +873,8 @@ function TerrainMesh({
           float gridOpacity = mix(0.4, 0.15, uProgress) * gridPulse;
           litColor += energyBlue * grid * gridOpacity * vReveal;
           
-          // Phase-based overlays
           float phaseValue = uPhase;
           
-          // Solar analysis highlight (phase 2+)
           if (phaseValue >= 2.0) {
             float solarFactor = max(0.0, dot(vNormal, vec3(0.0, 0.0, 1.0)));
             solarFactor = pow(solarFactor, 1.5);
@@ -482,7 +882,6 @@ function TerrainMesh({
             litColor = mix(litColor, litColor + solarGold * solarFactor, solarIntensity);
           }
           
-          // Optimal zones glow (phase 3+)
           if (phaseValue >= 3.0) {
             float optimalZone = smoothstep(0.4, 0.7, t) * (1.0 - smoothstep(0.7, 0.9, t));
             float zoneGlow = optimalZone * sin(uTime * 2.0 + vUv.x * 10.0) * 0.5 + 0.5;
@@ -490,17 +889,10 @@ function TerrainMesh({
             litColor += vec3(0.3, 0.9, 0.4) * zoneGlow * zoneIntensity;
           }
           
-          // Wireframe reveal at very start
           float wireframeReveal = smoothstep(0.0, 0.15, uRevealProgress);
-          float wireOpacity = (1.0 - wireframeReveal) * 0.8;
           litColor = mix(energyBlue * 0.5 + grid * energyBlue, litColor, wireframeReveal);
           
-          // Edge fade for floating terrain look
-          float edgeDist = max(abs(vUv.x - 0.5), abs(vUv.y - 0.5)) * 2.0;
-          float edgeFade = 1.0 - smoothstep(0.85, 1.0, edgeDist);
-          
-          // Final alpha with reveal
-          float alpha = vReveal * edgeFade;
+          float alpha = vReveal * edgeAA;
           
           gl_FragColor = vec4(litColor, alpha);
         }
@@ -535,15 +927,13 @@ function TerrainMesh({
       materialRef.current.uniforms.uPhase.value = phaseMap[phase] || 0;
     }
 
-    if (meshRef.current) {
-      meshRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 0.1) * 0.01;
-    }
+
   });
 
   return (
     <mesh
       ref={meshRef}
-      geometry={geometry}
+      geometry={geometryData}
       rotation={[-Math.PI / 2, 0, 0]}
       position={[0, TERRAIN_BASE_Y, 0]}
     >
@@ -635,7 +1025,6 @@ function EnergyParticles({ progress, phase }: { progress: number; phase: Analysi
   );
 }
 
-// Solar panel structures that appear during system design
 function SolarStructures({
   phase,
   progress,
@@ -666,20 +1055,16 @@ function SolarStructures({
     });
   }, [placements]);
 
-  useFrame((state) => {
+  useFrame(() => {
     if (groupRef.current) {
       groupRef.current.children.forEach((child, i) => {
         const struct = structures[i];
         if (!struct) return;
-        const baseY = getSurfaceHeight(struct.x, struct.z);
-        child.position.y = baseY + struct.postHeight + Math.sin(state.clock.elapsedTime * 1.5 + struct.floatPhase) * 0.02;
-        child.rotation.x = -struct.tilt + Math.sin(state.clock.elapsedTime * 0.5 + struct.floatPhase) * 0.04;
-        child.rotation.y = struct.azimuth;
+        child.position.y = getSurfaceHeight(struct.x, struct.z);
       });
     }
   });
 
-  // Only show during system design phase and later
   const showStructures = phaseNum >= 3;
   const structureOpacity = showStructures ? Math.min((progress - 0.5) * 4, 1) : 0;
 
@@ -688,9 +1073,16 @@ function SolarStructures({
   return (
     <group ref={groupRef}>
       {structures.map((struct, i) => (
-        <group key={i} position={[struct.x, getSurfaceHeight(struct.x, struct.z) + struct.postHeight, struct.z]}>
-          {/* Solar panel */}
-          <mesh rotation={[-struct.tilt, 0, 0]} scale={[struct.scale, struct.scale, struct.scale]}>
+        <group 
+          key={i} 
+          position={[struct.x, getSurfaceHeight(struct.x, struct.z), struct.z]}
+          rotation={[0, struct.azimuth, 0]}
+        >
+          <mesh 
+            position={[0, struct.postHeight, 0]} 
+            rotation={[-struct.tilt, 0, 0]} 
+            scale={[struct.scale, struct.scale, struct.scale]}
+          >
             <boxGeometry args={[0.8, 0.02, 0.5]} />
             <meshStandardMaterial
               color="#1a365d"
@@ -700,8 +1092,11 @@ function SolarStructures({
               opacity={structureOpacity}
             />
           </mesh>
-          {/* Panel frame */}
-          <mesh rotation={[-struct.tilt, 0, 0]} scale={[struct.scale, struct.scale, struct.scale]}>
+          <mesh 
+            position={[0, struct.postHeight, 0]} 
+            rotation={[-struct.tilt, 0, 0]} 
+            scale={[struct.scale, struct.scale, struct.scale]}
+          >
             <boxGeometry args={[0.85, 0.03, 0.55]} />
             <meshStandardMaterial
               color="#4a5568"
@@ -711,8 +1106,7 @@ function SolarStructures({
               opacity={structureOpacity * 0.8}
             />
           </mesh>
-          {/* Support post */}
-          <mesh position={[0, -struct.postHeight / 2, 0]} scale={[struct.scale, 1, struct.scale]}>
+          <mesh position={[0, struct.postHeight / 2, 0]} scale={[struct.scale, 1, struct.scale]}>
             <cylinderGeometry args={[0.02, 0.02, struct.postHeight, 8]} />
             <meshStandardMaterial
               color="#718096"
@@ -722,9 +1116,8 @@ function SolarStructures({
               opacity={structureOpacity}
             />
           </mesh>
-          {/* Glow effect */}
           <pointLight
-            position={[0, 0.2, 0]}
+            position={[0, struct.postHeight + 0.2, 0]}
             color="#fbbf24"
             intensity={structureOpacity * 0.3}
             distance={1}
@@ -766,7 +1159,10 @@ function WindTurbines({
   useFrame((state) => {
     if (groupRef.current) {
       groupRef.current.children.forEach((turbine, i) => {
-        // Find the blade group and rotate it
+        const struct = turbines[i];
+        if (!struct) return;
+        turbine.position.y = getSurfaceHeight(struct.x, struct.z);
+        
         const blades = turbine.children.find(c => c.name === 'blades');
         if (blades) {
           blades.rotation.z = state.clock.elapsedTime * (2 + i * 0.3);
@@ -782,59 +1178,59 @@ function WindTurbines({
 
   return (
     <group ref={groupRef}>
-      {turbines.map((turbine, i) => (
-        <group
-          key={i}
-          position={[
-            turbine.x,
-            getSurfaceHeight(turbine.x, turbine.z) + turbine.height * turbine.scale,
-            turbine.z,
-          ]}
-          scale={turbine.scale}
-        >
-          {/* Tower */}
-          <mesh position={[0, -turbine.height / 2, 0]}>
-            <cylinderGeometry args={[0.08, 0.12, turbine.height, 8]} />
-            <meshStandardMaterial
-              color="#e2e8f0"
-              metalness={0.3}
-              roughness={0.6}
-              transparent
-              opacity={turbineOpacity}
-            />
-          </mesh>
-          {/* Nacelle */}
-          <mesh position={[0, 0, 0]}>
-            <boxGeometry args={[0.15, 0.12, 0.3]} />
-            <meshStandardMaterial
-              color="#e2e8f0"
-              metalness={0.4}
-              roughness={0.5}
-              transparent
-              opacity={turbineOpacity}
-            />
-          </mesh>
-          {/* Blades - geometry centered at hub, extends outward */}
-          <group name="blades" position={[0, 0, 0.16]}>
-            {[0, 1, 2].map((blade) => (
-              <mesh
-                key={blade}
-                rotation={[0, 0, (blade * Math.PI * 2) / 3]}
-              >
-                {/* Blade geometry extends from 0 to 0.8, so we translate it to pivot around origin */}
-                <boxGeometry args={[0.03, 0.8, 0.01]} translate={[0, 0.4, 0]} />
-                <meshStandardMaterial
-                  color="#f7fafc"
-                  metalness={0.2}
-                  roughness={0.7}
-                  transparent
-                  opacity={turbineOpacity}
-                />
-              </mesh>
-            ))}
+      {turbines.map((turbine, i) => {
+        const towerHeight = turbine.height * turbine.scale;
+        
+        return (
+          <group
+            key={i}
+            position={[
+              turbine.x,
+              getSurfaceHeight(turbine.x, turbine.z),
+              turbine.z,
+            ]}
+          >
+            <mesh position={[0, towerHeight / 2, 0]}>
+              <cylinderGeometry args={[0.08 * turbine.scale, 0.12 * turbine.scale, towerHeight, 8]} />
+              <meshStandardMaterial
+                color="#e2e8f0"
+                metalness={0.3}
+                roughness={0.6}
+                transparent
+                opacity={turbineOpacity}
+              />
+            </mesh>
+            <mesh position={[0, towerHeight, 0]}>
+              <boxGeometry args={[0.15 * turbine.scale, 0.12 * turbine.scale, 0.3 * turbine.scale]} />
+              <meshStandardMaterial
+                color="#e2e8f0"
+                metalness={0.4}
+                roughness={0.5}
+                transparent
+                opacity={turbineOpacity}
+              />
+            </mesh>
+            <group name="blades" position={[0, towerHeight, 0.16 * turbine.scale]}>
+              {[0, 1, 2].map((blade) => (
+                <mesh
+                  key={blade}
+                  rotation={[0, 0, (blade * Math.PI * 2) / 3]}
+                  position={[0, 0.4 * turbine.scale, 0]}
+                >
+                  <boxGeometry args={[0.03 * turbine.scale, 0.8 * turbine.scale, 0.01 * turbine.scale]} />
+                  <meshStandardMaterial
+                    color="#f7fafc"
+                    metalness={0.2}
+                    roughness={0.7}
+                    transparent
+                    opacity={turbineOpacity}
+                  />
+                </mesh>
+              ))}
+            </group>
           </group>
-        </group>
-      ))}
+        );
+      })}
     </group>
   );
 }
@@ -1013,44 +1409,33 @@ function GridFloor({ revealProgress }: { revealProgress: number }) {
   );
 }
 
-// Cinematic camera controller
-function CameraController({ phase, isEntering }: { phase: AnalysisPhase; isEntering: boolean }) {
+function CameraController({ isEntering }: { phase: AnalysisPhase; isEntering: boolean }) {
   const { camera } = useThree();
-  const targetPosition = useRef(new THREE.Vector3(12, 10, 12));
-  const lookAtTarget = useRef(new THREE.Vector3(0, 0, 0));
+  const targetPosition = useRef(new THREE.Vector3(10, 7, 10));
+  const animationProgress = useRef(0);
+  const isAnimating = useRef(true);
 
   useEffect(() => {
     if (isEntering) {
-      // Start far away and high for dramatic entrance
       camera.position.set(20, 15, 20);
       targetPosition.current.set(10, 7, 10);
+      animationProgress.current = 0;
+      isAnimating.current = true;
     }
   }, [isEntering, camera]);
 
-  useEffect(() => {
-    switch (phase) {
-      case 'data-collection':
-        targetPosition.current.set(10, 7, 10);
-        break;
-      case 'constraint-integration':
-        targetPosition.current.set(8, 6, 8);
-        break;
-      case 'technology-optimization':
-        targetPosition.current.set(7, 5, 9);
-        break;
-      case 'system-design':
-        targetPosition.current.set(6, 5, 7);
-        break;
-      case 'financial-modeling':
-      case 'complete':
-        targetPosition.current.set(8, 6, 8);
-        break;
-    }
-  }, [phase]);
-
   useFrame(() => {
-    camera.position.lerp(targetPosition.current, 0.015);
-    camera.lookAt(lookAtTarget.current);
+    if (!isAnimating.current) return;
+    
+    animationProgress.current += 0.015;
+    
+    if (animationProgress.current >= 1) {
+      isAnimating.current = false;
+      return;
+    }
+    
+    camera.position.lerp(targetPosition.current, 0.03);
+    camera.lookAt(0, 0, 0);
   });
 
   return null;
@@ -1201,26 +1586,29 @@ export function TerrainAnalysisScene({
             <PerspectiveCamera makeDefault position={[12, 10, 12]} fov={45} />
             <CameraController phase={phase} isEntering={isEntering} />
 
-            {/* Lighting */}
             <ambientLight intensity={0.5} />
             <directionalLight
               position={[10, 15, 8]}
               intensity={1.0}
               color="#fff7ed"
-              castShadow
             />
             <pointLight position={[-8, 5, -8]} intensity={0.35} color="#86efac" />
             <pointLight position={[8, 3, 8]} intensity={0.25} color="#7dd3fc" />
             <hemisphereLight args={['#cfe8ff', '#b7e4c7', 0.35]} />
 
-            {/* Main terrain */}
             <TerrainMesh
               phase={phase}
               progress={progress}
               revealProgress={revealProgress}
               terrainData={terrainData}
+              polygon={polygon}
             />
-
+            <TerrainCrossSection
+              polygon={polygon}
+              terrainData={terrainData}
+              resolution={TERRAIN_RESOLUTION}
+              revealProgress={revealProgress}
+            />
             {/* Progressive elements */}
             <EnergyParticles progress={progress} phase={phase} />
             <SolarStructures
@@ -1253,18 +1641,20 @@ export function TerrainAnalysisScene({
               color="#34d399"
             />
 
-            {/* Controls */}
             <OrbitControls
               enableZoom={true}
-              enablePan={false}
-              minDistance={5}
-              maxDistance={25}
-              minPolarAngle={Math.PI / 6}
-              maxPolarAngle={Math.PI / 2.2}
-              autoRotate
-              autoRotateSpeed={0.2}
-              enableDamping
-              dampingFactor={0.05}
+              enablePan={true}
+              enableRotate={true}
+              minDistance={2}
+              maxDistance={50}
+              minPolarAngle={0.1}
+              maxPolarAngle={Math.PI / 2.05}
+              autoRotate={false}
+              enableDamping={true}
+              dampingFactor={0.08}
+              rotateSpeed={0.8}
+              zoomSpeed={1.2}
+              panSpeed={0.8}
             />
 
             {/* Atmospheric fog */}
