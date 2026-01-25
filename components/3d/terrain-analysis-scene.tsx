@@ -12,6 +12,31 @@ import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { AnalysisPhase } from '@/components/agent';
 
+export interface TerrainHeightmap {
+  width: number;
+  height: number;
+  data: number[];
+}
+
+function normalizeHeightmap(heightmap: TerrainHeightmap) {
+  const { data } = heightmap;
+  const normalized = new Float32Array(data.length);
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+
+  for (const value of data) {
+    min = Math.min(min, value);
+    max = Math.max(max, value);
+  }
+
+  const range = max - min || 1;
+  for (let i = 0; i < data.length; i++) {
+    normalized[i] = (data[i] - min) / range;
+  }
+
+  return normalized;
+}
+
 // Generate realistic terrain heightmap using multiple noise octaves
 function generateTerrainData(width: number, height: number, seed: number = 42) {
   const data = new Float32Array(width * height);
@@ -63,20 +88,41 @@ function generateTerrainData(width: number, height: number, seed: number = 42) {
 function TerrainMesh({
   phase,
   progress,
+<<<<<<< Updated upstream
   revealProgress
 }: {
+=======
+  revealProgress,
+  heightmap
+}: { 
+>>>>>>> Stashed changes
   phase: AnalysisPhase;
   progress: number;
   revealProgress: number;
+  heightmap?: TerrainHeightmap | null;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.ShaderMaterial>(null);
+<<<<<<< Updated upstream
 
   const resolution = 128;
   const terrainData = useMemo(() => generateTerrainData(resolution, resolution), []);
 
+=======
+  
+  const width = heightmap?.width ?? 128;
+  const height = heightmap?.height ?? 128;
+  const terrainData = useMemo(() => {
+    if (!heightmap?.data || heightmap.data.length !== width * height) {
+      return generateTerrainData(width, height);
+    }
+
+    return normalizeHeightmap(heightmap);
+  }, [heightmap, width, height]);
+  
+>>>>>>> Stashed changes
   const geometry = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(10, 10, resolution - 1, resolution - 1);
+    const geo = new THREE.PlaneGeometry(10, 10, width - 1, height - 1);
     const positions = geo.attributes.position.array as Float32Array;
 
     for (let i = 0; i < terrainData.length; i++) {
@@ -86,7 +132,7 @@ function TerrainMesh({
 
     geo.computeVertexNormals();
     return geo;
-  }, [terrainData]);
+  }, [terrainData, width, height]);
 
   // Beautiful lush green shader with progressive reveal
   const shaderMaterial = useMemo(() => {
@@ -748,13 +794,15 @@ interface TerrainAnalysisSceneProps {
   progress: number;
   isVisible: boolean;
   onTransitionComplete?: () => void;
+  heightmap?: TerrainHeightmap | null;
 }
 
 export function TerrainAnalysisScene({
   phase,
   progress,
   isVisible,
-  onTransitionComplete
+  onTransitionComplete,
+  heightmap
 }: TerrainAnalysisSceneProps) {
   const [mounted, setMounted] = useState(false);
   const [isEntering, setIsEntering] = useState(true);
@@ -836,6 +884,7 @@ export function TerrainAnalysisScene({
               phase={phase}
               progress={progress}
               revealProgress={revealProgress}
+              heightmap={heightmap}
             />
 
             {/* Progressive elements */}
