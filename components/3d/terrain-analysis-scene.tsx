@@ -493,7 +493,7 @@ function TerrainCrossSection({
 
 
 
-type PlacementZone = {
+export type PlacementZone = {
   x1: number;
   z1: number;
   x2: number;
@@ -506,7 +506,7 @@ type PlacementZone = {
   notes?: string;
 };
 
-type PlacementPlan = {
+export type PlacementPlan = {
   zones: PlacementZone[];
 };
 
@@ -1213,7 +1213,40 @@ function CameraController({ isEntering }: { phase: AnalysisPhase; isEntering: bo
   return null;
 }
 
-// Main scene component with transition support
+export interface TerrainCache {
+  elevationData: number[];
+  elevationBounds: { north: number; south: number; east: number; west: number };
+  gridWidth: number;
+  gridHeight: number;
+  placementPlan: PlacementPlan | null;
+  polygonHash: string;
+}
+
+function hashPolygon(polygon: PolygonCoordinates[] | null | undefined): string {
+  if (!polygon || polygon.length === 0) return 'empty';
+  return polygon.map(p => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`).join('|');
+}
+
+export function saveTerrainCache(planId: string, cache: TerrainCache): void {
+  try {
+    localStorage.setItem(`terrain-cache-${planId}`, JSON.stringify(cache));
+  } catch (e) {
+    console.warn('Failed to save terrain cache:', e);
+  }
+}
+
+export function loadTerrainCache(planId: string): TerrainCache | null {
+  try {
+    const cached = localStorage.getItem(`terrain-cache-${planId}`);
+    if (cached) {
+      return JSON.parse(cached) as TerrainCache;
+    }
+  } catch (e) {
+    console.warn('Failed to load terrain cache:', e);
+  }
+  return null;
+}
+
 interface TerrainAnalysisSceneProps {
   phase: AnalysisPhase;
   progress: number;
@@ -1221,6 +1254,9 @@ interface TerrainAnalysisSceneProps {
   onTransitionComplete?: () => void;
   polygon?: PolygonCoordinates[] | null;
   className?: string;
+  cachedTerrain?: TerrainCache | null;
+  planId?: string;
+  onTerrainReady?: (cache: TerrainCache) => void;
 }
 
 export function TerrainAnalysisScene({
@@ -1229,17 +1265,31 @@ export function TerrainAnalysisScene({
   isVisible,
   onTransitionComplete,
   polygon,
-  className
+  className,
+  cachedTerrain,
+  planId,
+  onTerrainReady,
 }: TerrainAnalysisSceneProps) {
   const [mounted, setMounted] = useState(false);
   const [isEntering, setIsEntering] = useState(true);
-  const [revealProgress, setRevealProgress] = useState(0);
-  const [realElevationData, setRealElevationData] = useState<Float32Array | null>(null);
-  const [elevationBounds, setElevationBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(null);
-  const [elevationGridWidth, setElevationGridWidth] = useState<number | null>(null);
-  const [elevationGridHeight, setElevationGridHeight] = useState<number | null>(null);
-  const [placementPlan, setPlacementPlan] = useState<PlacementPlan | null>(null);
+  const [revealProgress, setRevealProgress] = useState(cachedTerrain ? 1 : 0);
+  const [realElevationData, setRealElevationData] = useState<Float32Array | null>(
+    cachedTerrain ? new Float32Array(cachedTerrain.elevationData) : null
+  );
+  const [elevationBounds, setElevationBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(
+    cachedTerrain?.elevationBounds ?? null
+  );
+  const [elevationGridWidth, setElevationGridWidth] = useState<number | null>(
+    cachedTerrain?.gridWidth ?? null
+  );
+  const [elevationGridHeight, setElevationGridHeight] = useState<number | null>(
+    cachedTerrain?.gridHeight ?? null
+  );
+  const [placementPlan, setPlacementPlan] = useState<PlacementPlan | null>(
+    cachedTerrain?.placementPlan ?? null
+  );
   const [selectedZone, setSelectedZone] = useState<PlacementZone | null>(null);
+  const [terrainCacheReady, setTerrainCacheReady] = useState(!!cachedTerrain);
   const draftConstraints = usePlanStore((state) => state.draftConstraints);
   const terrainData = useMemo(
     () => buildTerrainHeightmap(realElevationData, TERRAIN_RESOLUTION, elevationGridWidth, elevationGridHeight),
@@ -1267,6 +1317,9 @@ export function TerrainAnalysisScene({
   }, []);
 
   useEffect(() => {
+    if (cachedTerrain) {
+      return;
+    }
     if (polygon && polygon.length >= 3) {
       fetchElevationGrid(polygon)
         .then(({ data, gridWidth, gridHeight, bounds }) => {
@@ -1279,7 +1332,7 @@ export function TerrainAnalysisScene({
           console.error("Failed to load elevation data", err);
         });
     }
-  }, [polygon]);
+  }, [polygon, cachedTerrain]);
 
   useEffect(() => {
     if (!draftConstraints?.budget || !draftConstraints?.energy || !draftConstraints?.technical) {
@@ -1409,17 +1462,51 @@ export function TerrainAnalysisScene({
       cancelled = true;
       controller.abort();
     };
-  }, [realElevationData, terrainData, elevationBounds, elevationGridWidth, elevationGridHeight, draftConstraints, polygon]);
+  }, [realElevationData, terrainData, elevationBounds, elevationGridWidth, elevationGridHeight, draftConstraints, polygon, cachedTerrain]);
 
-  // Progressive reveal animation
   useEffect(() => {
+    if (
+      !terrainCacheReady &&
+      realElevationData &&
+      elevationBounds &&
+      elevationGridWidth &&
+      elevationGridHeight &&
+      placementPlan &&
+      polygon
+    ) {
+      const cache: TerrainCache = {
+        elevationData: Array.from(realElevationData),
+        elevationBounds,
+        gridWidth: elevationGridWidth,
+        gridHeight: elevationGridHeight,
+        placementPlan,
+        polygonHash: hashPolygon(polygon),
+      };
+      
+      if (planId) {
+        saveTerrainCache(planId, cache);
+      }
+      
+      onTerrainReady?.(cache);
+      setTerrainCacheReady(true);
+    }
+  }, [realElevationData, elevationBounds, elevationGridWidth, elevationGridHeight, placementPlan, polygon, planId, onTerrainReady, terrainCacheReady]);
+
+  useEffect(() => {
+    if (cachedTerrain) {
+      setRevealProgress(1);
+      setIsEntering(false);
+      onTransitionComplete?.();
+      return;
+    }
     if (isVisible) {
       setIsEntering(true);
       setRevealProgress(0);
 
-      // Animate reveal progress
       const startTime = Date.now();
-      const duration = 3000; // 3 seconds for full reveal
+      const duration = 3000;
+      let animationFrameId: number;
+      let completed = false;
 
       const animate = () => {
         const elapsed = Date.now() - startTime;
@@ -1427,16 +1514,23 @@ export function TerrainAnalysisScene({
         setRevealProgress(newProgress);
 
         if (newProgress < 1) {
-          requestAnimationFrame(animate);
-        } else {
+          animationFrameId = requestAnimationFrame(animate);
+        } else if (!completed) {
+          completed = true;
           setIsEntering(false);
           onTransitionComplete?.();
         }
       };
 
-      requestAnimationFrame(animate);
+      animationFrameId = requestAnimationFrame(animate);
+      
+      return () => {
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+        }
+      };
     }
-  }, [isVisible, onTransitionComplete]);
+  }, [isVisible, onTransitionComplete, cachedTerrain]);
 
   if (!mounted) return null;
 

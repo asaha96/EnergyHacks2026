@@ -96,12 +96,11 @@ export default function AreaSelectPage() {
     label: string;
   }>>([]);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
+  const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
 
-  // -- 3D TERRAIN ANALYSIS STATE --
   const [show3DView, setShow3DView] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [isTransitioningTo3D, setIsTransitioningTo3D] = useState(false);
-  // -------------------------------
 
   const { draftConstraints, updateDraftConstraints, addPlan, setDraftArea } = usePlanStore();
 
@@ -768,6 +767,9 @@ export default function AreaSelectPage() {
       timeline,
     });
 
+    const newPlanId = `plan-${Date.now()}`;
+    setPendingPlanId(newPlanId);
+    
     setIsConstraintsSidebarOpen(false);
     setIsAgentSidebarOpen(true);
     setAnalysisProgress(0);
@@ -823,9 +825,7 @@ export default function AreaSelectPage() {
   }, [budget]);
 
   const handleSavePlan = useCallback(async () => {
-    if (!prospectedArea) return;
-
-    // Consent now triggers automatically after analysis, no check needed here
+    if (!prospectedArea || !pendingPlanId) return;
 
     setIsSavingPlan(true);
 
@@ -834,7 +834,7 @@ export default function AreaSelectPage() {
     const areaData = calculateAreaWithUnits(prospectedArea);
 
     const newPlan = {
-      id: `plan-${Date.now()}`,
+      id: pendingPlanId,
       userId: 'mock-user',
       name: locationName || `Plan ${new Date().toLocaleDateString()}`,
       status: 'complete' as const,
@@ -882,7 +882,7 @@ export default function AreaSelectPage() {
 
     setIsSavingPlan(false);
     router.push(`/overview/${newPlan.id}`);
-  }, [prospectedArea, getAnalysisValues, locationName, draftConstraints, equipmentPlacements, addPlan, setDraftArea, router]);
+  }, [prospectedArea, pendingPlanId, getAnalysisValues, locationName, draftConstraints, equipmentPlacements, addPlan, setDraftArea, router]);
 
   const handleAuthorizeAgent = useCallback((scopes: string[]) => {
     setIsConsentModalOpen(false);
@@ -1185,6 +1185,7 @@ export default function AreaSelectPage() {
         progress={analysisProgress}
         isVisible={show3DView}
         polygon={prospectedArea}
+        planId={pendingPlanId ?? undefined}
       />
 
 
