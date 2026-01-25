@@ -1,11 +1,9 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import {
-  ArrowLeft,
-  Leaf,
   MoreHorizontal,
   Download,
   Share2,
@@ -36,6 +34,7 @@ import {
 import { PlanDetailPanel } from '@/components/overview';
 import { usePlanStore } from '@/stores/plan-store';
 import type { Plan } from '@/types/plan';
+import { loadTerrainCache, type TerrainCache } from '@/components/3d';
 
 const TerrainAnalysisScene = dynamic(
   () => import('@/components/3d/terrain-analysis-scene').then((mod) => mod.TerrainAnalysisScene),
@@ -57,6 +56,7 @@ export default function OverviewPage() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [cachedTerrain, setCachedTerrain] = useState<TerrainCache | null>(null);
 
   useEffect(() => {
     if (planId) {
@@ -64,6 +64,10 @@ export default function OverviewPage() {
       if (found) {
         setPlan(found);
         setEditedName(found.name);
+        const cached = loadTerrainCache(planId);
+        if (cached) {
+          setCachedTerrain(cached);
+        }
       } else {
         router.push('/home');
       }
@@ -130,6 +134,8 @@ export default function OverviewPage() {
           isVisible={true}
           polygon={polygonCoords}
           className="right-0"
+          cachedTerrain={cachedTerrain}
+          planId={planId}
         />
 
         <AnalysisOverlay
