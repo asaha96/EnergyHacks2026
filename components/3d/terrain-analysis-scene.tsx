@@ -771,10 +771,21 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function buildTerrainHeightmap(realElevationData: Float32Array | null, resolution: number) {
-  if (realElevationData && realElevationData.length === 100) {
+function buildTerrainHeightmap(
+  realElevationData: Float32Array | null,
+  resolution: number,
+  gridWidth: number | null = null,
+  gridHeight: number | null = null
+) {
+  // Use real elevation data if available with valid dimensions
+  if (realElevationData && realElevationData.length > 0 && gridWidth && gridHeight) {
+    const expectedLength = gridWidth * gridHeight;
+    if (realElevationData.length !== expectedLength) {
+      console.warn(`Elevation data length mismatch: got ${realElevationData.length}, expected ${expectedLength}`);
+      return generateTerrainData(resolution, resolution);
+    }
+
     const data = new Float32Array(resolution * resolution);
-    const gridSize = 10;
 
     let minElev = Infinity;
     let maxElev = -Infinity;
@@ -787,9 +798,9 @@ function buildTerrainHeightmap(realElevationData: Float32Array | null, resolutio
 
     for (let y = 0; y < resolution; y++) {
       for (let x = 0; x < resolution; x++) {
-        const gx = (x / (resolution - 1)) * (gridSize - 1);
-        const gy = (y / (resolution - 1)) * (gridSize - 1);
-        let elev = bicubicInterpolate(realElevationData, gridSize, gx, gy);
+        const gx = (x / (resolution - 1)) * (gridWidth - 1);
+        const gy = (y / (resolution - 1)) * (gridHeight - 1);
+        let elev = bicubicInterpolate(realElevationData, gridWidth, gx, gy);
         elev = ((elev - minElev) / range) * 2.0;
         data[y * resolution + x] = elev;
       }
@@ -898,11 +909,7 @@ function TerrainMesh({
   const shaderMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
       uniforms: {
-        uTime: { value: 0 },
-        uProgress: { value: 0 },
         uRevealProgress: { value: 0 },
-        uPhase: { value: 0 },
-        uScanLine: { value: 0 },
         uElevationScale: { value: 0 },
       },
       vertexShader: `
@@ -917,12 +924,10 @@ function TerrainMesh({
         varying vec3 vNormal;
         varying float vElevation;
         varying float vReveal;
-        varying float vAlpha;
         varying float vEdgeDist;
         
         void main() {
           vUv = uv;
-          vAlpha = alpha;
           vEdgeDist = edgeDist;
           
           float targetZ = position.z;
@@ -940,28 +945,40 @@ function TerrainMesh({
         }
       `,
       fragmentShader: `
-        uniform float uTime;
-        uniform float uProgress;
         uniform float uRevealProgress;
-        uniform float uPhase;
-        uniform float uScanLine;
         
         varying vec2 vUv;
         varying vec3 vPosition;
         varying vec3 vNormal;
         varying float vElevation;
         varying float vReveal;
-        varying float vAlpha;
         varying float vEdgeDist;
         
-        vec3 meadowBase = vec3(0.28, 0.45, 0.25);
-        vec3 grassLight = vec3(0.38, 0.55, 0.30);
-        vec3 grassMid = vec3(0.45, 0.58, 0.32);
-        vec3 hillGreen = vec3(0.42, 0.52, 0.30);
-        vec3 highGrass = vec3(0.48, 0.54, 0.34);
-        
-        vec3 solarGold = vec3(1.0, 0.85, 0.25);
-        vec3 energyBlue = vec3(0.2, 0.7, 1.0);
+        vec3 getTerrainColor(float elevation) {
+          vec3 water = vec3(0.56, 0.75, 0.82);
+          vec3 sand = vec3(0.94, 0.91, 0.78);
+          vec3 grass = vec3(0.64, 0.78, 0.46);
+          vec3 forest = vec3(0.42, 0.63, 0.35);
+          vec3 highland = vec3(0.58, 0.68, 0.45);
+          vec3 rock = vec3(0.65, 0.60, 0.52);
+          vec3 snow = vec3(0.96, 0.97, 0.98);
+          
+          float t = clamp(elevation, 0.0, 1.0);
+          
+          if (t < 0.08) {
+            return mix(water, sand, t / 0.08);
+          } else if (t < 0.20) {
+            return mix(sand, grass, (t - 0.08) / 0.12);
+          } else if (t < 0.45) {
+            return mix(grass, forest, (t - 0.20) / 0.25);
+          } else if (t < 0.65) {
+            return mix(forest, highland, (t - 0.45) / 0.20);
+          } else if (t < 0.85) {
+            return mix(highland, rock, (t - 0.65) / 0.20);
+          } else {
+            return mix(rock, snow, (t - 0.85) / 0.15);
+          }
+        }
         
         void main() {
           float edgeAA = smoothstep(-0.05, 0.05, vEdgeDist);
@@ -969,68 +986,20 @@ function TerrainMesh({
             discard;
           }
           
-          float t = clamp(vElevation / 0.8, 0.0, 1.0);
+          float normalizedElev = clamp(vElevation / 2.0, 0.0, 1.0);
+          vec3 terrainColor = getTerrainColor(normalizedElev);
           
-          vec3 terrainColor;
-          if (t < 0.25) {
-            terrainColor = mix(meadowBase, grassLight, t / 0.25);
-          } else if (t < 0.5) {
-            terrainColor = mix(grassLight, grassMid, (t - 0.25) / 0.25);
-          } else if (t < 0.75) {
-            terrainColor = mix(grassMid, hillGreen, (t - 0.5) / 0.25);
-          } else {
-            terrainColor = mix(hillGreen, highGrass, (t - 0.75) / 0.25);
-          }
+          vec3 lightDir = normalize(vec3(0.5, 0.4, 0.8));
+          vec3 lightColor = vec3(1.0, 0.98, 0.95);
           
-          vec3 sunDir = normalize(vec3(0.4, 0.3, 1.0));
-          vec3 skyDir = normalize(vec3(-0.2, 0.5, 0.8));
-          
-          float sunDiffuse = max(dot(vNormal, sunDir), 0.0);
-          float skyDiffuse = max(dot(vNormal, skyDir), 0.0) * 0.3;
-          float ambient = 0.25;
-          
-          vec3 sunColor = vec3(1.0, 0.95, 0.85);
-          vec3 skyColor = vec3(0.6, 0.8, 1.0);
+          float diffuse = max(dot(vNormal, lightDir), 0.0);
+          float ambient = 0.55;
           
           vec3 litColor = terrainColor * ambient;
-          litColor += terrainColor * sunDiffuse * 0.65 * sunColor;
-          litColor += terrainColor * skyDiffuse * skyColor;
+          litColor += terrainColor * diffuse * 0.5 * lightColor;
           
-          float rimLight = 1.0 - max(dot(vNormal, vec3(0.0, 0.0, 1.0)), 0.0);
-          rimLight = pow(rimLight, 3.0) * 0.3;
-          litColor += vec3(0.4, 0.7, 0.5) * rimLight;
-          
-          float scanY = mod(uTime * 0.4, 1.4);
-          float scanEffect = smoothstep(scanY - 0.15, scanY, vUv.y) * 
-                            (1.0 - smoothstep(scanY, scanY + 0.03, vUv.y));
-          litColor += energyBlue * scanEffect * 1.5 * (1.0 - uProgress);
-          
-          float gridScale = 25.0;
-          float gridX = abs(fract(vUv.x * gridScale - 0.5) - 0.5) / fwidth(vUv.x * gridScale);
-          float gridY = abs(fract(vUv.y * gridScale - 0.5) - 0.5) / fwidth(vUv.y * gridScale);
-          float grid = 1.0 - min(min(gridX, gridY), 1.0);
-          float gridPulse = 0.3 + 0.2 * sin(uTime * 1.5);
-          float gridOpacity = mix(0.4, 0.15, uProgress) * gridPulse;
-          litColor += energyBlue * grid * gridOpacity * vReveal;
-          
-          float phaseValue = uPhase;
-          
-          if (phaseValue >= 2.0) {
-            float solarFactor = max(0.0, dot(vNormal, vec3(0.0, 0.0, 1.0)));
-            solarFactor = pow(solarFactor, 1.5);
-            float solarIntensity = smoothstep(0.3, 0.6, uProgress) * 0.4;
-            litColor = mix(litColor, litColor + solarGold * solarFactor, solarIntensity);
-          }
-          
-          if (phaseValue >= 3.0) {
-            float optimalZone = smoothstep(0.4, 0.7, t) * (1.0 - smoothstep(0.7, 0.9, t));
-            float zoneGlow = optimalZone * sin(uTime * 2.0 + vUv.x * 10.0) * 0.5 + 0.5;
-            float zoneIntensity = smoothstep(0.5, 0.8, uProgress) * 0.25;
-            litColor += vec3(0.3, 0.9, 0.4) * zoneGlow * zoneIntensity;
-          }
-          
-          float wireframeReveal = smoothstep(0.0, 0.15, uRevealProgress);
-          litColor = mix(energyBlue * 0.5 + grid * energyBlue, litColor, wireframeReveal);
+          float fresnel = pow(1.0 - max(dot(vNormal, vec3(0.0, 0.0, 1.0)), 0.0), 2.0);
+          litColor += vec3(0.9, 0.95, 1.0) * fresnel * 0.08;
           
           float alpha = vReveal * edgeAA;
           
@@ -1042,32 +1011,17 @@ function TerrainMesh({
     });
   }, []);
 
-  useFrame((state) => {
+  useFrame(() => {
     if (materialRef.current) {
-      materialRef.current.uniforms.uTime.value = state.clock.elapsedTime;
-      materialRef.current.uniforms.uProgress.value = progress;
       materialRef.current.uniforms.uRevealProgress.value = revealProgress;
 
-      // Smooth elevation scale animation
       const targetScale = Math.min(revealProgress * 2, 1);
       materialRef.current.uniforms.uElevationScale.value = THREE.MathUtils.lerp(
         materialRef.current.uniforms.uElevationScale.value,
         targetScale,
         0.05
       );
-
-      const phaseMap: Record<string, number> = {
-        'data-collection': 0,
-        'constraint-integration': 1,
-        'technology-optimization': 2,
-        'system-design': 3,
-        'financial-modeling': 4,
-        'complete': 5,
-      };
-      materialRef.current.uniforms.uPhase.value = phaseMap[phase] || 0;
     }
-
-
   });
 
   return (
@@ -1451,8 +1405,8 @@ export function TerrainAnalysisScene({
   const [placementPlan, setPlacementPlan] = useState<PlacementPlan | null>(null);
   const draftConstraints = usePlanStore((state) => state.draftConstraints);
   const terrainData = useMemo(
-    () => buildTerrainHeightmap(realElevationData, TERRAIN_RESOLUTION),
-    [realElevationData]
+    () => buildTerrainHeightmap(realElevationData, TERRAIN_RESOLUTION, elevationGridWidth, elevationGridHeight),
+    [realElevationData, elevationGridWidth, elevationGridHeight]
   );
 
   // Calculate polygon bounds for placing objects within the terrain

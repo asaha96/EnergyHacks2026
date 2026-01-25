@@ -78,7 +78,6 @@ export async function* geminiChatStream(
         model: modelName,
         max_completion_tokens: options?.maxTokens ?? 16384,
         stream: true,
-        temperature: options?.disableReasoning ? 0 : 0.7,
     });
 
     for await (const chunk of stream) {
