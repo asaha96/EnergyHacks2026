@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Loader2, 
-  Check, 
-  Info, 
-  AlertCircle, 
-  Search, 
-  Cpu, 
-  Zap, 
+import {
+  Loader2,
+  Check,
+  Info,
+  AlertCircle,
+  Search,
+  Cpu,
+  Zap,
   FileText,
   Sparkles,
   Database,
@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type AgentMessageType = 
+export type AgentMessageType =
   | 'thinking'
   | 'loading'
   | 'success'
@@ -33,7 +33,8 @@ export type AgentMessageType =
   | 'data'
   | 'insight'
   | 'calculation'
-  | 'summary';
+  | 'summary'
+  | 'action';
 
 export type MessageStatus = 'active' | 'completed' | 'error';
 
@@ -69,6 +70,8 @@ export interface AgentMessageData {
     label?: string;
   };
   summaryData?: SummaryData;
+  onAction?: () => void;
+  actionLabel?: string;
 }
 
 interface AgentMessageProps {
@@ -90,6 +93,7 @@ const iconMap: Record<AgentMessageType, LucideIcon> = {
   insight: Sparkles,
   calculation: TrendingUp,
   summary: LayoutGrid,
+  action: Zap,
 };
 
 const iconColorMap: Record<AgentMessageType, string> = {
@@ -106,6 +110,7 @@ const iconColorMap: Record<AgentMessageType, string> = {
   insight: 'text-violet-500',
   calculation: 'text-orange-500',
   summary: 'text-primary',
+  action: 'text-primary',
 };
 
 const bgColorMap: Record<AgentMessageType, string> = {
@@ -122,6 +127,7 @@ const bgColorMap: Record<AgentMessageType, string> = {
   insight: 'bg-violet-500/10',
   calculation: 'bg-orange-500/10',
   summary: 'bg-primary/10',
+  action: 'bg-primary/10',
 };
 
 function useTypewriter(text: string, speed: number = 20, enabled: boolean = true) {
@@ -178,7 +184,7 @@ import { Button } from '@/components/ui/button';
 import { Sun, Clock, DollarSign, Leaf, ArrowRight, RotateCcw } from 'lucide-react';
 
 function SummaryCard({ data }: { data: SummaryData }) {
-  const formatCurrency = (value: number) => 
+  const formatCurrency = (value: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
   const formatNumber = (value: number) => new Intl.NumberFormat('en-US').format(value);
 
@@ -212,15 +218,15 @@ function SummaryCard({ data }: { data: SummaryData }) {
           </motion.div>
         ))}
       </div>
-      
+
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.35 }}
         className="flex flex-col gap-2 pt-1"
       >
-        <Button 
-          className="w-full gap-2" 
+        <Button
+          className="w-full gap-2"
           size="sm"
           onClick={data.onSave}
           disabled={data.isSaving}
@@ -299,29 +305,29 @@ export function AgentMessage({ message, className }: AgentMessageProps) {
   const isActive = status === 'active';
   const isThinking = message.type === 'thinking' && isActive;
   const isLoading = (message.type === 'loading' || message.type === 'search' || message.type === 'processing' || message.type === 'analysis' || message.type === 'data' || message.type === 'calculation') && isActive;
-  
-  const displayType = status === 'completed' && message.resolvedType 
-    ? message.resolvedType 
+
+  const displayType = status === 'completed' && message.resolvedType
+    ? message.resolvedType
     : message.type;
-  
+
   const Icon = iconMap[displayType];
-  
+
   const { displayedText } = useTypewriter(message.text, 15, isActive && !isThinking);
 
   const [visibleSubMessages, setVisibleSubMessages] = useState<number>(0);
-  
+
   useEffect(() => {
     if (!message.subMessages || status !== 'completed') return;
-    
+
     const timers: NodeJS.Timeout[] = [];
-    
+
     message.subMessages.forEach((sub, index) => {
       const timer = setTimeout(() => {
         setVisibleSubMessages(index + 1);
       }, sub.delay ?? (index + 1) * 300);
       timers.push(timer);
     });
-    
+
     return () => timers.forEach(clearTimeout);
   }, [message.subMessages, status]);
 
@@ -329,11 +335,11 @@ export function AgentMessage({ message, className }: AgentMessageProps) {
     <motion.div
       initial={{ opacity: 0, y: 12, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ 
-        type: 'spring', 
-        damping: 25, 
+      transition={{
+        type: 'spring',
+        damping: 25,
         stiffness: 350,
-        duration: 0.25 
+        duration: 0.25
       }}
       className={cn(
         'group relative py-3',
@@ -341,7 +347,7 @@ export function AgentMessage({ message, className }: AgentMessageProps) {
       )}
     >
       <div className="flex items-start gap-3">
-        <motion.div 
+        <motion.div
           className={cn(
             'flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors duration-300',
             bgColorMap[displayType]
@@ -349,15 +355,15 @@ export function AgentMessage({ message, className }: AgentMessageProps) {
           animate={isActive ? { scale: [1, 1.05, 1] } : {}}
           transition={isActive ? { duration: 2, repeat: Infinity } : {}}
         >
-          <Icon 
+          <Icon
             className={cn(
               'h-4 w-4 transition-colors duration-300',
               iconColorMap[displayType],
               isLoading && 'animate-spin'
-            )} 
+            )}
           />
         </motion.div>
-        
+
         <div className="flex-1 min-w-0 pt-0.5">
           <p className={cn(
             'text-sm leading-relaxed',
@@ -373,9 +379,9 @@ export function AgentMessage({ message, className }: AgentMessageProps) {
               />
             )}
           </p>
-          
+
           {message.detail && status === 'completed' && (
-            <motion.p 
+            <motion.p
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               className="text-xs text-muted-foreground mt-1"
@@ -383,7 +389,7 @@ export function AgentMessage({ message, className }: AgentMessageProps) {
               {message.detail}
             </motion.p>
           )}
-          
+
           {message.value !== undefined && status === 'completed' && (
             <motion.div
               initial={{ opacity: 0, x: -10 }}
@@ -395,7 +401,7 @@ export function AgentMessage({ message, className }: AgentMessageProps) {
               <span className="text-sm font-medium text-foreground">{message.value}</span>
             </motion.div>
           )}
-          
+
           {message.sparkline && status === 'completed' && (
             <motion.div
               initial={{ opacity: 0, y: 5 }}
@@ -403,8 +409,8 @@ export function AgentMessage({ message, className }: AgentMessageProps) {
               transition={{ delay: 0.15 }}
               className="mt-2"
             >
-              <MiniSparkline 
-                data={message.sparkline.data} 
+              <MiniSparkline
+                data={message.sparkline.data}
                 color={message.sparkline.color}
                 label={message.sparkline.label}
               />
@@ -430,8 +436,27 @@ export function AgentMessage({ message, className }: AgentMessageProps) {
           {message.type === 'summary' && message.summaryData && (
             <SummaryCard data={message.summaryData} />
           )}
+
+          {message.onAction && status === 'completed' && (
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="mt-3"
+            >
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-2 bg-primary hover:bg-primary/90"
+                onClick={message.onAction}
+              >
+                <Zap className="h-3.5 w-3.5" />
+                {message.actionLabel || 'Continue'}
+              </Button>
+            </motion.div>
+          )}
         </div>
-        
+
         {isActive && (
           <motion.div
             className="shrink-0 mt-1"
