@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ArrowLeft, StopCircle } from 'lucide-react';
+import { X, ArrowLeft, StopCircle, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { AgentMessageStream } from './agent-message-stream';
@@ -16,6 +16,8 @@ interface AgentSidebarProps {
   onStop?: () => void;
   onSavePlan?: () => void;
   onStartOver?: () => void;
+  onVerify?: () => void;
+  hasConsent?: boolean;
   onMapWidthChange?: (width: string) => void;
   messages: AgentMessageData[];
   currentPhase: AnalysisPhase;
@@ -31,6 +33,8 @@ export function AgentSidebar({
   onStop,
   onSavePlan,
   onStartOver,
+  onVerify,
+  hasConsent = false,
   onMapWidthChange,
   messages,
   currentPhase,
@@ -46,7 +50,7 @@ export function AgentSidebar({
     } else {
       onMapWidthChange?.('100%');
     }
-    
+
     return () => {
       onMapWidthChange?.('100%');
     };
