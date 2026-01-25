@@ -72,11 +72,11 @@ export function MapTo3DTransition({
           {/* Animated background gradient */}
           <motion.div
             className="absolute inset-0"
-            initial={{ background: 'radial-gradient(circle at 50% 50%, rgba(10, 22, 40, 0) 0%, rgba(10, 22, 40, 1) 100%)' }}
+            initial={{ background: 'radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.4) 0%, rgba(226, 232, 240, 1) 100%)' }}
             animate={{
               background: phase === 'reveal'
-                ? 'radial-gradient(circle at 50% 50%, rgba(10, 22, 40, 0.8) 0%, rgba(10, 22, 40, 1) 100%)'
-                : 'radial-gradient(circle at 50% 50%, rgba(10, 22, 40, 0.95) 0%, rgba(10, 22, 40, 1) 100%)'
+                ? 'radial-gradient(circle at 50% 50%, rgba(236, 253, 245, 0.9) 0%, rgba(226, 232, 240, 1) 100%)'
+                : 'radial-gradient(circle at 50% 50%, rgba(248, 250, 252, 0.95) 0%, rgba(226, 232, 240, 1) 100%)'
             }}
             transition={{ duration: 0.5 }}
           />
@@ -128,7 +128,7 @@ export function MapTo3DTransition({
             {[...Array(8)].map((_, i) => (
               <motion.div
                 key={i}
-                className="absolute h-px w-full bg-gradient-to-r from-transparent via-primary/50 to-transparent"
+                className="absolute h-px w-full bg-gradient-to-r from-transparent via-primary/30 to-transparent"
                 initial={{ y: -20 }}
                 animate={{ y: ['0%', '100%'] }}
                 transition={{
@@ -238,7 +238,7 @@ export function MapTo3DTransition({
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
             >
-              <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+              <h2 className="text-xl font-semibold text-slate-900 flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-primary" />
                 Terrain Analysis
               </h2>
