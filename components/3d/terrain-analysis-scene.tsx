@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useMemo, useEffect, useState } from 'react';
+import { useRef, useMemo, useEffect, useState, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import {
   OrbitControls,
@@ -22,6 +22,66 @@ const TERRAIN_ELEVATION_SCALE = 0.8;
 const PLACEMENT_BOUND = TERRAIN_HALF * 0.90;
 
 type NormalizedPolygon = Array<{ x: number; z: number }>;
+
+type PolygonBounds = {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  centerX: number;
+  centerZ: number;
+  width: number;
+  height: number;
+  normalizedPolygon: NormalizedPolygon | null;
+};
+
+function getPolygonBounds(polygon: PolygonCoordinates[] | null | undefined): PolygonBounds {
+  if (!polygon || polygon.length < 3) {
+    // Default to terrain bounds
+    return {
+      minX: -PLACEMENT_BOUND,
+      maxX: PLACEMENT_BOUND,
+      minZ: -PLACEMENT_BOUND,
+      maxZ: PLACEMENT_BOUND,
+      centerX: 0,
+      centerZ: 0,
+      width: PLACEMENT_BOUND * 2,
+      height: PLACEMENT_BOUND * 2,
+      normalizedPolygon: null,
+    };
+  }
+
+  const { normalized, scaleX, scaleZ } = normalizePolygonTo3D(polygon);
+
+  const xs = normalized.map(p => p.x);
+  const zs = normalized.map(p => p.z);
+
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minZ = Math.min(...zs);
+  const maxZ = Math.max(...zs);
+
+  return {
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    centerX: (minX + maxX) / 2,
+    centerZ: (minZ + maxZ) / 2,
+    width: maxX - minX,
+    height: maxZ - minZ,
+    normalizedPolygon: normalized,
+  };
+}
+
+// Map normalized [-1,1] coordinate to polygon bounds with margin
+function toPolygonCoord(value: number, min: number, max: number, margin: number = 0.15): number {
+  const clamped = clampNumber(value, -1, 1);
+  const range = max - min;
+  const marginedMin = min + range * margin;
+  const marginedMax = max - range * margin;
+  return marginedMin + ((clamped + 1) / 2) * (marginedMax - marginedMin);
+}
 
 function normalizePolygonTo3D(polygon: PolygonCoordinates[]): {
   normalized: NormalizedPolygon;
@@ -66,43 +126,43 @@ function normalizePolygonTo3D(polygon: PolygonCoordinates[]): {
 function isPointInPolygon(x: number, y: number, polygon: NormalizedPolygon): boolean {
   let inside = false;
   const n = polygon.length;
-  
+
   for (let i = 0, j = n - 1; i < n; j = i++) {
     const xi = polygon[i].x, yi = polygon[i].z;
     const xj = polygon[j].x, yj = polygon[j].z;
-    
+
     if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
       inside = !inside;
     }
   }
-  
+
   return inside;
 }
 
 function distanceToPolygonEdge(x: number, y: number, polygon: NormalizedPolygon): number {
   let minDist = Infinity;
   const n = polygon.length;
-  
+
   for (let i = 0, j = n - 1; i < n; j = i++) {
     const x1 = polygon[i].x, y1 = polygon[i].z;
     const x2 = polygon[j].x, y2 = polygon[j].z;
-    
+
     const dx = x2 - x1;
     const dy = y2 - y1;
     const len2 = dx * dx + dy * dy;
-    
+
     let t = 0;
     if (len2 > 0) {
       t = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / len2));
     }
-    
+
     const projX = x1 + t * dx;
     const projY = y1 + t * dy;
     const dist = Math.sqrt((x - projX) * (x - projX) + (y - projY) * (y - projY));
-    
+
     minDist = Math.min(minDist, dist);
   }
-  
+
   return minDist;
 }
 
@@ -123,7 +183,7 @@ function createPolygonTerrainGeometry(
   for (let i = 0; i < positions.length / 3; i++) {
     const x = positions[i * 3];
     const y = positions[i * 3 + 1];
-    
+
     const u = uvs[i * 2];
     const v = uvs[i * 2 + 1];
 
@@ -139,7 +199,7 @@ function createPolygonTerrainGeometry(
     const inPolygon = isPointInPolygon(x, worldZ, normalizedPolygon);
     const edgeDist = distanceToPolygonEdge(x, worldZ, normalizedPolygon);
     const signedDist = inPolygon ? edgeDist : -edgeDist;
-    
+
     edgeDistances[i] = signedDist;
     alphas[i] = 1.0;
   }
@@ -163,31 +223,31 @@ function sampleTerrainHeightAt(
 ): number {
   const u = (x / scaleX + 0.5);
   const v = (-z / scaleZ + 0.5);
-  
+
   const gx = u * (resolution - 1);
   const gy = (1 - v) * (resolution - 1);
-  
+
   const x0 = Math.floor(gx);
   const y0 = Math.floor(gy);
   const x1 = Math.min(x0 + 1, resolution - 1);
   const y1 = Math.min(y0 + 1, resolution - 1);
-  
+
   const tx = gx - x0;
   const ty = gy - y0;
-  
+
   const clampX0 = Math.max(0, Math.min(resolution - 1, x0));
   const clampY0 = Math.max(0, Math.min(resolution - 1, y0));
   const clampX1 = Math.max(0, Math.min(resolution - 1, x1));
   const clampY1 = Math.max(0, Math.min(resolution - 1, y1));
-  
+
   const h00 = terrainData[clampY0 * resolution + clampX0] || 0;
   const h10 = terrainData[clampY0 * resolution + clampX1] || 0;
   const h01 = terrainData[clampY1 * resolution + clampX0] || 0;
   const h11 = terrainData[clampY1 * resolution + clampX1] || 0;
-  
+
   const hx0 = h00 + (h10 - h00) * tx;
   const hx1 = h01 + (h11 - h01) * tx;
-  
+
   return hx0 + (hx1 - hx0) * ty;
 }
 
@@ -204,76 +264,76 @@ function TerrainCrossSection({
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.ShaderMaterial>(null);
-  
+
   const { geometry, scaleX, scaleZ } = useMemo(() => {
     if (!polygon || polygon.length < 3) {
       return { geometry: null, scaleX: TERRAIN_SIZE, scaleZ: TERRAIN_SIZE };
     }
-    
+
     const { normalized, scaleX, scaleZ } = normalizePolygonTo3D(polygon);
     const segmentsPerEdge = 48;
-    
+
     const vertices: number[] = [];
     const uvs: number[] = [];
     const baseElevations: number[] = [];
     const indices: number[] = [];
-    
+
     let vertexIndex = 0;
-    
+
     for (let i = 0; i < normalized.length; i++) {
       const p1 = normalized[i];
       const p2 = normalized[(i + 1) % normalized.length];
-      
+
       for (let j = 0; j < segmentsPerEdge; j++) {
         const t1 = j / segmentsPerEdge;
         const t2 = (j + 1) / segmentsPerEdge;
-        
+
         const x1 = p1.x + (p2.x - p1.x) * t1;
         const z1 = p1.z + (p2.z - p1.z) * t1;
         const x2 = p1.x + (p2.x - p1.x) * t2;
         const z2 = p1.z + (p2.z - p1.z) * t2;
-        
+
         const elev1 = sampleTerrainHeightAt(terrainData, resolution, x1, z1, scaleX, scaleZ);
         const elev2 = sampleTerrainHeightAt(terrainData, resolution, x2, z2, scaleX, scaleZ);
-        
+
         const uCoord1 = (i + t1) / normalized.length;
         const uCoord2 = (i + t2) / normalized.length;
-        
+
         vertices.push(
           x1, elev1, z1,
           x2, elev2, z2,
           x1, 0, z1,
           x2, 0, z2
         );
-        
+
         baseElevations.push(elev1, elev2, elev1, elev2);
-        
+
         uvs.push(
           uCoord1, 1.0,
           uCoord2, 1.0,
           uCoord1, 0.0,
           uCoord2, 0.0
         );
-        
+
         indices.push(
           vertexIndex, vertexIndex + 2, vertexIndex + 1,
           vertexIndex + 1, vertexIndex + 2, vertexIndex + 3
         );
-        
+
         vertexIndex += 4;
       }
     }
-    
+
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geo.setAttribute('baseElev', new THREE.Float32BufferAttribute(baseElevations, 1));
     geo.setIndex(indices);
     geo.computeVertexNormals();
-    
+
     return { geometry: geo, scaleX, scaleZ };
   }, [polygon, terrainData, resolution]);
-  
+
   const shaderMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
       uniforms: {
@@ -397,12 +457,12 @@ function TerrainCrossSection({
       side: THREE.DoubleSide,
     });
   }, []);
-  
+
   useFrame((state) => {
     if (materialRef.current) {
       materialRef.current.uniforms.uTime.value = state.clock.elapsedTime;
       materialRef.current.uniforms.uRevealProgress.value = revealProgress;
-      
+
       const targetScale = Math.min(revealProgress * 2, 1);
       materialRef.current.uniforms.uElevationScale.value = THREE.MathUtils.lerp(
         materialRef.current.uniforms.uElevationScale.value,
@@ -411,9 +471,9 @@ function TerrainCrossSection({
       );
     }
   });
-  
+
   if (!geometry) return null;
-  
+
   return (
     <mesh ref={meshRef} geometry={geometry}>
       <primitive object={shaderMaterial} ref={materialRef} attach="material" />
@@ -634,25 +694,26 @@ function toWorldCoord(value: number) {
 }
 
 const DEFAULT_MARKERS: MarkerPlacement[] = [
-  { x: 0.38, z: 0.33, label: 'Solar Zone A', type: 'solar' },
-  { x: -0.48, z: 0.22, label: 'Wind Corridor', type: 'wind' },
-  { x: 0.12, z: -0.43, label: 'Optimal Site', type: 'optimal' },
-  { x: -0.32, z: -0.39, label: 'Battery Storage', type: 'battery' },
-  { x: 0.55, z: -0.11, label: 'Grid Connect', type: 'grid' },
+  { x: 0.3, z: 0.25, label: 'Solar Zone A', type: 'solar' },
+  { x: -0.35, z: 0.18, label: 'Wind Corridor', type: 'wind' },
+  { x: 0.1, z: -0.35, label: 'Optimal Site', type: 'optimal' },
+  { x: -0.25, z: -0.3, label: 'Battery Storage', type: 'battery' },
+  { x: 0.4, z: -0.1, label: 'Grid Connect', type: 'grid' },
 ];
 
 function buildFallbackPlan(): PlacementPlan {
   const solar: SolarPlacement[] = [];
   const wind: WindPlacement[] = [
-    { x: -0.62, z: 0.42, height: 1.45, scale: 0.4 },
-    { x: 0.7, z: -0.3, height: 1.3, scale: 0.36 },
-    { x: -0.32, z: -0.68, height: 1.38, scale: 0.38 },
+    { x: -0.45, z: 0.35, height: 1.45, scale: 0.4 },
+    { x: 0.5, z: -0.25, height: 1.3, scale: 0.36 },
+    { x: -0.25, z: -0.5, height: 1.38, scale: 0.38 },
   ];
 
   for (let i = 0; i < 12; i++) {
     const rand = mulberry32(200 + i * 37)();
     const angle = (i / 12) * Math.PI * 2;
-    const radius = 0.35 + rand * 0.4;
+    // Reduced radius to keep solar panels centered on terrain
+    const radius = 0.25 + rand * 0.35;
     solar.push({
       x: Math.cos(angle) * radius,
       z: Math.sin(angle) * radius,
@@ -733,22 +794,22 @@ function TerrainMesh({
 
   const geometryData = useMemo(() => {
     const { normalized, scaleX, scaleZ } = normalizePolygonTo3D(polygon || []);
-    
+
     if (polygon && polygon.length >= 3) {
       return createPolygonTerrainGeometry(normalized, terrainData, resolution, scaleX, scaleZ);
     }
-    
+
     const geo = new THREE.PlaneGeometry(10, 10, resolution - 1, resolution - 1);
     const positions = geo.attributes.position.array as Float32Array;
     const vertexCount = positions.length / 3;
     const alphas = new Float32Array(vertexCount).fill(1.0);
     const edgeDistances = new Float32Array(vertexCount).fill(1.0);
-    
+
     for (let i = 0; i < terrainData.length; i++) {
       const elevation = terrainData[i];
       positions[i * 3 + 2] = elevation * TERRAIN_ELEVATION_SCALE;
     }
-    
+
     geo.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
     geo.setAttribute('edgeDist', new THREE.BufferAttribute(edgeDistances, 1));
     geo.computeVertexNormals();
@@ -1030,11 +1091,13 @@ function SolarStructures({
   progress,
   placements,
   getSurfaceHeight,
+  polygonBounds,
 }: {
   phase: AnalysisPhase;
   progress: number;
   placements: SolarPlacement[];
   getSurfaceHeight: (x: number, z: number) => number;
+  polygonBounds: PolygonBounds;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const phaseNum = ['data-collection', 'constraint-integration', 'technology-optimization', 'system-design', 'financial-modeling', 'complete'].indexOf(phase);
@@ -1043,17 +1106,25 @@ function SolarStructures({
     return placements.map((placement, i) => {
       const seed = Math.floor((placement.x * 1000 + placement.z * 2000) * 1000) + i * 19;
       const rand = mulberry32(seed);
+      const x = toPolygonCoord(placement.x, polygonBounds.minX, polygonBounds.maxX);
+      const z = toPolygonCoord(placement.z, polygonBounds.minZ, polygonBounds.maxZ);
+
+      // Check if position is inside the polygon (if polygon exists)
+      const isInside = !polygonBounds.normalizedPolygon ||
+        isPointInPolygon(x, z, polygonBounds.normalizedPolygon);
+
       return {
-        x: toWorldCoord(placement.x),
-        z: toWorldCoord(placement.z),
+        x,
+        z,
         tilt: clampNumber(placement.tilt ?? (0.2 + rand() * 0.2), 0.12, 0.5),
         scale: clampNumber(placement.scale ?? (0.28 + rand() * 0.18), 0.22, 0.5),
         azimuth: placement.azimuth ?? rand() * Math.PI * 2,
         postHeight: 0.28 + rand() * 0.28,
         floatPhase: rand() * Math.PI * 2,
+        isInside,
       };
-    });
-  }, [placements]);
+    }).filter(s => s.isInside);
+  }, [placements, polygonBounds]);
 
   useFrame(() => {
     if (groupRef.current) {
@@ -1073,14 +1144,14 @@ function SolarStructures({
   return (
     <group ref={groupRef}>
       {structures.map((struct, i) => (
-        <group 
-          key={i} 
+        <group
+          key={i}
           position={[struct.x, getSurfaceHeight(struct.x, struct.z), struct.z]}
           rotation={[0, struct.azimuth, 0]}
         >
-          <mesh 
-            position={[0, struct.postHeight, 0]} 
-            rotation={[-struct.tilt, 0, 0]} 
+          <mesh
+            position={[0, struct.postHeight, 0]}
+            rotation={[-struct.tilt, 0, 0]}
             scale={[struct.scale, struct.scale, struct.scale]}
           >
             <boxGeometry args={[0.8, 0.02, 0.5]} />
@@ -1092,9 +1163,9 @@ function SolarStructures({
               opacity={structureOpacity}
             />
           </mesh>
-          <mesh 
-            position={[0, struct.postHeight, 0]} 
-            rotation={[-struct.tilt, 0, 0]} 
+          <mesh
+            position={[0, struct.postHeight, 0]}
+            rotation={[-struct.tilt, 0, 0]}
             scale={[struct.scale, struct.scale, struct.scale]}
           >
             <boxGeometry args={[0.85, 0.03, 0.55]} />
@@ -1134,11 +1205,13 @@ function WindTurbines({
   progress,
   placements,
   getSurfaceHeight,
+  polygonBounds,
 }: {
   phase: AnalysisPhase;
   progress: number;
   placements: WindPlacement[];
   getSurfaceHeight: (x: number, z: number) => number;
+  polygonBounds: PolygonBounds;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const phaseNum = ['data-collection', 'constraint-integration', 'technology-optimization', 'system-design', 'financial-modeling', 'complete'].indexOf(phase);
@@ -1147,14 +1220,22 @@ function WindTurbines({
     return placements.map((placement, i) => {
       const seed = Math.floor((placement.x * 800 + placement.z * 900) * 1000) + i * 31;
       const rand = mulberry32(seed);
+      const x = toPolygonCoord(placement.x, polygonBounds.minX, polygonBounds.maxX);
+      const z = toPolygonCoord(placement.z, polygonBounds.minZ, polygonBounds.maxZ);
+
+      // Check if position is inside the polygon (if polygon exists)
+      const isInside = !polygonBounds.normalizedPolygon ||
+        isPointInPolygon(x, z, polygonBounds.normalizedPolygon);
+
       return {
-        x: toWorldCoord(placement.x),
-        z: toWorldCoord(placement.z),
+        x,
+        z,
         height: clampNumber(placement.height ?? (1.25 + rand() * 0.35), 1.1, 1.8),
         scale: clampNumber(placement.scale ?? (0.34 + rand() * 0.1), 0.3, 0.5),
+        isInside,
       };
-    });
-  }, [placements]);
+    }).filter(t => t.isInside);
+  }, [placements, polygonBounds]);
 
   useFrame((state) => {
     if (groupRef.current) {
@@ -1162,10 +1243,10 @@ function WindTurbines({
         const struct = turbines[i];
         if (!struct) return;
         turbine.position.y = getSurfaceHeight(struct.x, struct.z);
-        
+
         const blades = turbine.children.find(c => c.name === 'blades');
         if (blades) {
-          blades.rotation.z = state.clock.elapsedTime * (2 + i * 0.3);
+          blades.rotation.z = state.clock.elapsedTime * (0.5 + i * 0.1);
         }
       });
     }
@@ -1180,7 +1261,7 @@ function WindTurbines({
     <group ref={groupRef}>
       {turbines.map((turbine, i) => {
         const towerHeight = turbine.height * turbine.scale;
-        
+
         return (
           <group
             key={i}
@@ -1212,21 +1293,34 @@ function WindTurbines({
             </mesh>
             <group name="blades" position={[0, towerHeight, 0.16 * turbine.scale]}>
               {[0, 1, 2].map((blade) => (
-                <mesh
+                <group
                   key={blade}
                   rotation={[0, 0, (blade * Math.PI * 2) / 3]}
-                  position={[0, 0.4 * turbine.scale, 0]}
                 >
-                  <boxGeometry args={[0.03 * turbine.scale, 0.8 * turbine.scale, 0.01 * turbine.scale]} />
-                  <meshStandardMaterial
-                    color="#f7fafc"
-                    metalness={0.2}
-                    roughness={0.7}
-                    transparent
-                    opacity={turbineOpacity}
-                  />
-                </mesh>
+                  {/* Blade positioned to extend outward from hub center */}
+                  <mesh position={[0, 0.4 * turbine.scale, 0]}>
+                    <boxGeometry args={[0.03 * turbine.scale, 0.8 * turbine.scale, 0.01 * turbine.scale]} />
+                    <meshStandardMaterial
+                      color="#f7fafc"
+                      metalness={0.2}
+                      roughness={0.7}
+                      transparent
+                      opacity={turbineOpacity}
+                    />
+                  </mesh>
+                </group>
               ))}
+              {/* Hub at center */}
+              <mesh>
+                <sphereGeometry args={[0.05 * turbine.scale, 8, 8]} />
+                <meshStandardMaterial
+                  color="#cbd5e1"
+                  metalness={0.5}
+                  roughness={0.4}
+                  transparent
+                  opacity={turbineOpacity}
+                />
+              </mesh>
             </group>
           </group>
         );
@@ -1241,11 +1335,13 @@ function AnalysisMarkers({
   progress,
   placements,
   getSurfaceHeight,
+  polygonBounds,
 }: {
   phase: AnalysisPhase;
   progress: number;
   placements: MarkerPlacement[];
   getSurfaceHeight: (x: number, z: number) => number;
+  polygonBounds: PolygonBounds;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const phaseNum = ['data-collection', 'constraint-integration', 'technology-optimization', 'system-design', 'financial-modeling', 'complete'].indexOf(phase);
@@ -1254,17 +1350,25 @@ function AnalysisMarkers({
     return placements.map((placement, i) => {
       const seed = Math.floor((placement.x * 900 + placement.z * 1100) * 1000) + i * 13;
       const rand = mulberry32(seed);
+      const x = toPolygonCoord(placement.x, polygonBounds.minX, polygonBounds.maxX);
+      const z = toPolygonCoord(placement.z, polygonBounds.minZ, polygonBounds.maxZ);
+
+      // Check if position is inside the polygon (if polygon exists)
+      const isInside = !polygonBounds.normalizedPolygon ||
+        isPointInPolygon(x, z, polygonBounds.normalizedPolygon);
+
       return {
-        x: toWorldCoord(placement.x),
-        z: toWorldCoord(placement.z),
+        x,
+        z,
         label: placement.label,
         type: placement.type,
         stemHeight: 0.5 + rand() * 0.25,
         floatPhase: rand() * Math.PI * 2,
         showAtPhase: placement.type === 'grid' ? 4 : placement.type === 'optimal' || placement.type === 'battery' ? 3 : 2,
+        isInside,
       };
-    });
-  }, [placements]);
+    }).filter(m => m.isInside);
+  }, [placements, polygonBounds]);
 
   useFrame((state) => {
     if (groupRef.current) {
@@ -1426,14 +1530,14 @@ function CameraController({ isEntering }: { phase: AnalysisPhase; isEntering: bo
 
   useFrame(() => {
     if (!isAnimating.current) return;
-    
+
     animationProgress.current += 0.015;
-    
+
     if (animationProgress.current >= 1) {
       isAnimating.current = false;
       return;
     }
-    
+
     camera.position.lerp(targetPosition.current, 0.03);
     camera.lookAt(0, 0, 0);
   });
@@ -1467,16 +1571,27 @@ export function TerrainAnalysisScene({
     () => buildTerrainHeightmap(realElevationData, TERRAIN_RESOLUTION),
     [realElevationData]
   );
-  const getSurfaceHeight = useMemo(() => {
-    const revealScale = Math.min(revealProgress * 2, 1);
-    return (x: number, z: number) =>
-      getTerrainSurfaceHeight(terrainData, TERRAIN_RESOLUTION, x, z, revealScale);
-  }, [terrainData, revealProgress]);
+
+  // Calculate polygon bounds for placing objects within the terrain
+  const polygonBounds = useMemo(() => getPolygonBounds(polygon), [polygon]);
+  // Use ref to track revealProgress so useFrame callbacks get current value
+  const revealProgressRef = useRef(revealProgress);
+  useEffect(() => {
+    revealProgressRef.current = revealProgress;
+  }, [revealProgress]);
+
+  const getSurfaceHeight = useCallback(
+    (x: number, z: number) => {
+      const revealScale = Math.min(revealProgressRef.current * 2, 1);
+      return getTerrainSurfaceHeight(terrainData, TERRAIN_RESOLUTION, x, z, revealScale);
+    },
+    [terrainData]
+  );
 
   useEffect(() => {
     setMounted(true);
   }, []);
-  
+
   // Fetch real elevation data when polygon changes
   useEffect(() => {
     if (polygon && polygon.length >= 3) {
@@ -1616,18 +1731,21 @@ export function TerrainAnalysisScene({
               progress={progress}
               placements={placementPlan.solar}
               getSurfaceHeight={getSurfaceHeight}
+              polygonBounds={polygonBounds}
             />
             <WindTurbines
               phase={phase}
               progress={progress}
               placements={placementPlan.wind}
               getSurfaceHeight={getSurfaceHeight}
+              polygonBounds={polygonBounds}
             />
             <AnalysisMarkers
               phase={phase}
               progress={progress}
               placements={placementPlan.markers}
               getSurfaceHeight={getSurfaceHeight}
+              polygonBounds={polygonBounds}
             />
             <GridFloor revealProgress={revealProgress} />
 
