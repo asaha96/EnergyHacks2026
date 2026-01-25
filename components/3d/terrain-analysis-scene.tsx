@@ -14,6 +14,41 @@ import type { AnalysisPhase } from '@/components/agent';
 import { PolygonCoordinates } from '@/components/map';
 import { calculateCentroid, fetchElevationGrid } from '@/lib/geo';
 
+const TERRAIN_RESOLUTION = 128;
+const TERRAIN_SIZE = 10;
+const TERRAIN_HALF = TERRAIN_SIZE / 2;
+const TERRAIN_BASE_Y = -0.5;
+const TERRAIN_ELEVATION_SCALE = 1.5;
+const PLACEMENT_BOUND = TERRAIN_HALF * 0.92;
+
+type SolarPlacement = {
+  x: number;
+  z: number;
+  tilt?: number;
+  scale?: number;
+  azimuth?: number;
+};
+
+type WindPlacement = {
+  x: number;
+  z: number;
+  height?: number;
+  scale?: number;
+};
+
+type MarkerPlacement = {
+  x: number;
+  z: number;
+  label: string;
+  type: 'solar' | 'wind' | 'optimal' | 'battery' | 'grid';
+};
+
+type PlacementPlan = {
+  solar: SolarPlacement[];
+  wind: WindPlacement[];
+  markers: MarkerPlacement[];
+};
+
 // Generate realistic terrain heightmap using multiple noise octaves
 function generateTerrainData(width: number, height: number, seed: number = 42) {
   const data = new Float32Array(width * height);
@@ -100,66 +135,206 @@ function bicubicInterpolate(grid: Float32Array, gridSize: number, x: number, y: 
   return cubicInterpolate(colResults[0], colResults[1], colResults[2], colResults[3], dy);
 }
 
+function mulberry32(seed: number) {
+  return () => {
+    let t = (seed += 0x6D2B79F5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function toFiniteNumber(value: unknown, fallback: number) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function buildTerrainHeightmap(realElevationData: Float32Array | null, resolution: number) {
+  if (realElevationData && realElevationData.length === 100) {
+    const data = new Float32Array(resolution * resolution);
+    const gridSize = 10;
+
+    let minElev = Infinity;
+    let maxElev = -Infinity;
+    for (let i = 0; i < realElevationData.length; i++) {
+      minElev = Math.min(minElev, realElevationData[i]);
+      maxElev = Math.max(maxElev, realElevationData[i]);
+    }
+
+    const range = maxElev - minElev || 1;
+    const noiseData = generateTerrainData(resolution, resolution, 123);
+
+    for (let y = 0; y < resolution; y++) {
+      for (let x = 0; x < resolution; x++) {
+        const gx = (x / (resolution - 1)) * (gridSize - 1);
+        const gy = (y / (resolution - 1)) * (gridSize - 1);
+        let elev = bicubicInterpolate(realElevationData, gridSize, gx, gy);
+        elev = ((elev - minElev) / range) * 2.0;
+        elev += noiseData[y * resolution + x] * 0.15;
+        data[y * resolution + x] = elev;
+      }
+    }
+
+    return data;
+  }
+
+  return generateTerrainData(resolution, resolution);
+}
+
+function sampleTerrainHeight(terrainData: Float32Array, resolution: number, x: number, z: number) {
+  const u = clampNumber((x + TERRAIN_HALF) / TERRAIN_SIZE, 0, 1);
+  const v = clampNumber((-z + TERRAIN_HALF) / TERRAIN_SIZE, 0, 1);
+
+  const gx = u * (resolution - 1);
+  const gy = v * (resolution - 1);
+  const x0 = Math.floor(gx);
+  const y0 = Math.floor(gy);
+  const x1 = Math.min(x0 + 1, resolution - 1);
+  const y1 = Math.min(y0 + 1, resolution - 1);
+  const tx = gx - x0;
+  const ty = gy - y0;
+
+  const h00 = terrainData[y0 * resolution + x0];
+  const h10 = terrainData[y0 * resolution + x1];
+  const h01 = terrainData[y1 * resolution + x0];
+  const h11 = terrainData[y1 * resolution + x1];
+
+  const hx0 = h00 + (h10 - h00) * tx;
+  const hx1 = h01 + (h11 - h01) * tx;
+  return hx0 + (hx1 - hx0) * ty;
+}
+
+function getTerrainSurfaceHeight(
+  terrainData: Float32Array,
+  resolution: number,
+  x: number,
+  z: number,
+  revealScale: number
+) {
+  const elevation = sampleTerrainHeight(terrainData, resolution, x, z) * TERRAIN_ELEVATION_SCALE;
+  return TERRAIN_BASE_Y + elevation * revealScale;
+}
+
+function downsampleTerrainData(
+  terrainData: Float32Array,
+  resolution: number,
+  gridSize: number
+): number[] {
+  const downsampled: number[] = [];
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      const worldX = (x / (gridSize - 1)) * TERRAIN_SIZE - TERRAIN_HALF;
+      const worldZ = (y / (gridSize - 1)) * TERRAIN_SIZE - TERRAIN_HALF;
+      downsampled.push(sampleTerrainHeight(terrainData, resolution, worldX, worldZ));
+    }
+  }
+  return downsampled;
+}
+
+function toWorldCoord(value: number) {
+  return clampNumber(value, -1, 1) * PLACEMENT_BOUND;
+}
+
+const DEFAULT_MARKERS: MarkerPlacement[] = [
+  { x: 0.38, z: 0.33, label: 'Solar Zone A', type: 'solar' },
+  { x: -0.48, z: 0.22, label: 'Wind Corridor', type: 'wind' },
+  { x: 0.12, z: -0.43, label: 'Optimal Site', type: 'optimal' },
+  { x: -0.32, z: -0.39, label: 'Battery Storage', type: 'battery' },
+  { x: 0.55, z: -0.11, label: 'Grid Connect', type: 'grid' },
+];
+
+function buildFallbackPlan(): PlacementPlan {
+  const solar: SolarPlacement[] = [];
+  const wind: WindPlacement[] = [
+    { x: -0.62, z: 0.42, height: 1.45, scale: 0.4 },
+    { x: 0.7, z: -0.3, height: 1.3, scale: 0.36 },
+    { x: -0.32, z: -0.68, height: 1.38, scale: 0.38 },
+  ];
+
+  for (let i = 0; i < 12; i++) {
+    const rand = mulberry32(200 + i * 37)();
+    const angle = (i / 12) * Math.PI * 2;
+    const radius = 0.35 + rand * 0.4;
+    solar.push({
+      x: Math.cos(angle) * radius,
+      z: Math.sin(angle) * radius,
+      tilt: 0.18 + rand * 0.22,
+      scale: 0.26 + rand * 0.2,
+      azimuth: angle + 0.6,
+    });
+  }
+
+  return {
+    solar,
+    wind,
+    markers: DEFAULT_MARKERS,
+  };
+}
+
+function normalizePlacementPlan(raw: Partial<PlacementPlan>, fallback: PlacementPlan): PlacementPlan {
+  const solarRaw = Array.isArray(raw.solar) ? raw.solar : fallback.solar;
+  const windRaw = Array.isArray(raw.wind) ? raw.wind : fallback.wind;
+  const markerRaw = Array.isArray(raw.markers) ? raw.markers : fallback.markers;
+
+  const solar = Array.from({ length: 12 }).map((_, i) => {
+    const fallbackItem = fallback.solar[i % fallback.solar.length];
+    const item = solarRaw[i] ?? fallbackItem;
+    return {
+      x: clampNumber(toFiniteNumber(item?.x, fallbackItem.x), -1, 1),
+      z: clampNumber(toFiniteNumber(item?.z, fallbackItem.z), -1, 1),
+      tilt: clampNumber(toFiniteNumber(item?.tilt, fallbackItem.tilt ?? 0.25), 0.1, 0.5),
+      scale: clampNumber(toFiniteNumber(item?.scale, fallbackItem.scale ?? 0.32), 0.22, 0.5),
+      azimuth: toFiniteNumber(item?.azimuth, fallbackItem.azimuth ?? 0),
+    };
+  });
+
+  const wind = Array.from({ length: 3 }).map((_, i) => {
+    const fallbackItem = fallback.wind[i % fallback.wind.length];
+    const item = windRaw[i] ?? fallbackItem;
+    return {
+      x: clampNumber(toFiniteNumber(item?.x, fallbackItem.x), -1, 1),
+      z: clampNumber(toFiniteNumber(item?.z, fallbackItem.z), -1, 1),
+      height: clampNumber(toFiniteNumber(item?.height, fallbackItem.height ?? 1.4), 1.1, 1.8),
+      scale: clampNumber(toFiniteNumber(item?.scale, fallbackItem.scale ?? 0.38), 0.3, 0.5),
+    };
+  });
+
+  const fallbackMarkersByType = new Map(fallback.markers.map((marker) => [marker.type, marker]));
+  const markers = DEFAULT_MARKERS.map((template) => {
+    const match = markerRaw.find((marker) => marker?.type === template.type) ??
+      fallbackMarkersByType.get(template.type) ?? template;
+
+    return {
+      type: template.type,
+      label: template.label,
+      x: clampNumber(toFiniteNumber(match?.x, template.x), -1, 1),
+      z: clampNumber(toFiniteNumber(match?.z, template.z), -1, 1),
+    };
+  });
+
+  return { solar, wind, markers };
+}
+
 // Enhanced terrain mesh with progressive detail and lush green colors
 function TerrainMesh({
   phase,
   progress,
   revealProgress,
-  realElevationData
+  terrainData
 }: {
   phase: AnalysisPhase;
   progress: number;
   revealProgress: number;
-  realElevationData: Float32Array | null;
+  terrainData: Float32Array;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.ShaderMaterial>(null);
 
-  const resolution = 128;
-  
-  const terrainData = useMemo(() => {
-    if (realElevationData && realElevationData.length === 100) { // 10x10 grid
-      const data = new Float32Array(resolution * resolution);
-      const gridSize = 10;
-      
-      // Calculate min/max for normalization
-      let minElev = Infinity;
-      let maxElev = -Infinity;
-      for (let i = 0; i < realElevationData.length; i++) {
-        minElev = Math.min(minElev, realElevationData[i]);
-        maxElev = Math.max(maxElev, realElevationData[i]);
-      }
-      
-      const range = maxElev - minElev || 1;
-      
-      // Generate noise for texture detail
-      const noiseData = generateTerrainData(resolution, resolution, 123);
-
-      for (let y = 0; y < resolution; y++) {
-        for (let x = 0; x < resolution; x++) {
-          // Map resolution coords to 10x10 grid coords
-          const gx = (x / (resolution - 1)) * (gridSize - 1);
-          const gy = (y / (resolution - 1)) * (gridSize - 1); // Flip Y if needed, but usually matches
-          
-          let elev = bicubicInterpolate(realElevationData, gridSize, gx, gy);
-          
-          // Normalize to 0-1.5 range, but keep relative shape
-          elev = ((elev - minElev) / range) * 2.0;
-          
-          // Add some noise detail (reduced intensity)
-          elev += noiseData[y * resolution + x] * 0.15;
-          
-          // Apply gentle edge fade for floating terrain look, but don't force to zero
-          // We rely on shader alpha fade for the "floating" effect
-          
-          data[y * resolution + x] = elev;
-        }
-      }
-      return data;
-    } else {
-      return generateTerrainData(resolution, resolution);
-    }
-  }, [realElevationData]);
+  const resolution = TERRAIN_RESOLUTION;
 
   const geometry = useMemo(() => {
     const geo = new THREE.PlaneGeometry(10, 10, resolution - 1, resolution - 1);
@@ -167,7 +342,7 @@ function TerrainMesh({
 
     for (let i = 0; i < terrainData.length; i++) {
       const elevation = terrainData[i];
-      positions[i * 3 + 2] = elevation * 1.5;
+      positions[i * 3 + 2] = elevation * TERRAIN_ELEVATION_SCALE;
     }
 
     geo.computeVertexNormals();
@@ -370,7 +545,7 @@ function TerrainMesh({
       ref={meshRef}
       geometry={geometry}
       rotation={[-Math.PI / 2, 0, 0]}
-      position={[0, -0.5, 0]}
+      position={[0, TERRAIN_BASE_Y, 0]}
     >
       <primitive object={shaderMaterial} ref={materialRef} attach="material" />
     </mesh>
@@ -461,37 +636,45 @@ function EnergyParticles({ progress, phase }: { progress: number; phase: Analysi
 }
 
 // Solar panel structures that appear during system design
-function SolarStructures({ phase, progress }: { phase: AnalysisPhase; progress: number }) {
+function SolarStructures({
+  phase,
+  progress,
+  placements,
+  getSurfaceHeight,
+}: {
+  phase: AnalysisPhase;
+  progress: number;
+  placements: SolarPlacement[];
+  getSurfaceHeight: (x: number, z: number) => number;
+}) {
   const groupRef = useRef<THREE.Group>(null);
   const phaseNum = ['data-collection', 'constraint-integration', 'technology-optimization', 'system-design', 'financial-modeling', 'complete'].indexOf(phase);
 
   const structures = useMemo(() => {
-    const items = [];
-    // Generate solar array positions on the terrain
-    for (let i = 0; i < 12; i++) {
-      const angle = (i / 12) * Math.PI * 2;
-      const radius = 1.5 + Math.random() * 2;
-      items.push({
-        position: [
-          Math.cos(angle) * radius,
-          0.1 + Math.random() * 0.3,
-          Math.sin(angle) * radius
-        ] as [number, number, number],
-        rotation: Math.random() * 0.3 - 0.15,
-        scale: 0.3 + Math.random() * 0.2,
-        delay: i * 0.1,
-      });
-    }
-    return items;
-  }, []);
+    return placements.map((placement, i) => {
+      const seed = Math.floor((placement.x * 1000 + placement.z * 2000) * 1000) + i * 19;
+      const rand = mulberry32(seed);
+      return {
+        x: toWorldCoord(placement.x),
+        z: toWorldCoord(placement.z),
+        tilt: clampNumber(placement.tilt ?? (0.2 + rand() * 0.2), 0.12, 0.5),
+        scale: clampNumber(placement.scale ?? (0.28 + rand() * 0.18), 0.22, 0.5),
+        azimuth: placement.azimuth ?? rand() * Math.PI * 2,
+        postHeight: 0.28 + rand() * 0.28,
+        floatPhase: rand() * Math.PI * 2,
+      };
+    });
+  }, [placements]);
 
   useFrame((state) => {
     if (groupRef.current) {
       groupRef.current.children.forEach((child, i) => {
-        // Gentle floating animation
-        child.position.y = structures[i].position[1] + Math.sin(state.clock.elapsedTime * 1.5 + i) * 0.02;
-        // Rotate to face sun
-        child.rotation.x = -0.3 + Math.sin(state.clock.elapsedTime * 0.5) * 0.05;
+        const struct = structures[i];
+        if (!struct) return;
+        const baseY = getSurfaceHeight(struct.x, struct.z);
+        child.position.y = baseY + struct.postHeight + Math.sin(state.clock.elapsedTime * 1.5 + struct.floatPhase) * 0.02;
+        child.rotation.x = -struct.tilt + Math.sin(state.clock.elapsedTime * 0.5 + struct.floatPhase) * 0.04;
+        child.rotation.y = struct.azimuth;
       });
     }
   });
@@ -505,9 +688,9 @@ function SolarStructures({ phase, progress }: { phase: AnalysisPhase; progress: 
   return (
     <group ref={groupRef}>
       {structures.map((struct, i) => (
-        <group key={i} position={struct.position} rotation={[0, struct.rotation, 0]}>
+        <group key={i} position={[struct.x, getSurfaceHeight(struct.x, struct.z) + struct.postHeight, struct.z]}>
           {/* Solar panel */}
-          <mesh rotation={[-0.3, 0, 0]} scale={struct.scale}>
+          <mesh rotation={[-struct.tilt, 0, 0]} scale={[struct.scale, struct.scale, struct.scale]}>
             <boxGeometry args={[0.8, 0.02, 0.5]} />
             <meshStandardMaterial
               color="#1a365d"
@@ -518,7 +701,7 @@ function SolarStructures({ phase, progress }: { phase: AnalysisPhase; progress: 
             />
           </mesh>
           {/* Panel frame */}
-          <mesh rotation={[-0.3, 0, 0]} scale={struct.scale}>
+          <mesh rotation={[-struct.tilt, 0, 0]} scale={[struct.scale, struct.scale, struct.scale]}>
             <boxGeometry args={[0.85, 0.03, 0.55]} />
             <meshStandardMaterial
               color="#4a5568"
@@ -529,8 +712,8 @@ function SolarStructures({ phase, progress }: { phase: AnalysisPhase; progress: 
             />
           </mesh>
           {/* Support post */}
-          <mesh position={[0, -struct.position[1] / 2, 0]} scale={struct.scale}>
-            <cylinderGeometry args={[0.02, 0.02, struct.position[1], 8]} />
+          <mesh position={[0, -struct.postHeight / 2, 0]} scale={[struct.scale, 1, struct.scale]}>
+            <cylinderGeometry args={[0.02, 0.02, struct.postHeight, 8]} />
             <meshStandardMaterial
               color="#718096"
               metalness={0.5}
@@ -553,15 +736,32 @@ function SolarStructures({ phase, progress }: { phase: AnalysisPhase; progress: 
 }
 
 // Wind turbine structures
-function WindTurbines({ phase, progress }: { phase: AnalysisPhase; progress: number }) {
+function WindTurbines({
+  phase,
+  progress,
+  placements,
+  getSurfaceHeight,
+}: {
+  phase: AnalysisPhase;
+  progress: number;
+  placements: WindPlacement[];
+  getSurfaceHeight: (x: number, z: number) => number;
+}) {
   const groupRef = useRef<THREE.Group>(null);
   const phaseNum = ['data-collection', 'constraint-integration', 'technology-optimization', 'system-design', 'financial-modeling', 'complete'].indexOf(phase);
 
-  const turbines = useMemo(() => [
-    { position: [-3, 1.5, 2] as [number, number, number], scale: 0.4 },
-    { position: [3.5, 1.2, -1.5] as [number, number, number], scale: 0.35 },
-    { position: [-2, 1.3, -3] as [number, number, number], scale: 0.38 },
-  ], []);
+  const turbines = useMemo(() => {
+    return placements.map((placement, i) => {
+      const seed = Math.floor((placement.x * 800 + placement.z * 900) * 1000) + i * 31;
+      const rand = mulberry32(seed);
+      return {
+        x: toWorldCoord(placement.x),
+        z: toWorldCoord(placement.z),
+        height: clampNumber(placement.height ?? (1.25 + rand() * 0.35), 1.1, 1.8),
+        scale: clampNumber(placement.scale ?? (0.34 + rand() * 0.1), 0.3, 0.5),
+      };
+    });
+  }, [placements]);
 
   useFrame((state) => {
     if (groupRef.current) {
@@ -583,10 +783,18 @@ function WindTurbines({ phase, progress }: { phase: AnalysisPhase; progress: num
   return (
     <group ref={groupRef}>
       {turbines.map((turbine, i) => (
-        <group key={i} position={turbine.position} scale={turbine.scale}>
+        <group
+          key={i}
+          position={[
+            turbine.x,
+            getSurfaceHeight(turbine.x, turbine.z) + turbine.height * turbine.scale,
+            turbine.z,
+          ]}
+          scale={turbine.scale}
+        >
           {/* Tower */}
-          <mesh position={[0, -turbine.position[1] / 2, 0]}>
-            <cylinderGeometry args={[0.08, 0.12, turbine.position[1], 8]} />
+          <mesh position={[0, -turbine.height / 2, 0]}>
+            <cylinderGeometry args={[0.08, 0.12, turbine.height, 8]} />
             <meshStandardMaterial
               color="#e2e8f0"
               metalness={0.3}
@@ -632,23 +840,43 @@ function WindTurbines({ phase, progress }: { phase: AnalysisPhase; progress: num
 }
 
 // Floating analysis markers with better animations
-function AnalysisMarkers({ phase, progress }: { phase: AnalysisPhase; progress: number }) {
+function AnalysisMarkers({
+  phase,
+  progress,
+  placements,
+  getSurfaceHeight,
+}: {
+  phase: AnalysisPhase;
+  progress: number;
+  placements: MarkerPlacement[];
+  getSurfaceHeight: (x: number, z: number) => number;
+}) {
   const groupRef = useRef<THREE.Group>(null);
   const phaseNum = ['data-collection', 'constraint-integration', 'technology-optimization', 'system-design', 'financial-modeling', 'complete'].indexOf(phase);
 
-  const markers = useMemo(() => [
-    { position: [1.8, 1.0, 1.5] as [number, number, number], label: 'Solar Zone A', type: 'solar', showAtPhase: 2 },
-    { position: [-2.2, 0.8, 1.0] as [number, number, number], label: 'Wind Corridor', type: 'wind', showAtPhase: 2 },
-    { position: [0.5, 1.2, -2.0] as [number, number, number], label: 'Optimal Site', type: 'optimal', showAtPhase: 3 },
-    { position: [-1.5, 0.6, -1.8] as [number, number, number], label: 'Battery Storage', type: 'battery', showAtPhase: 3 },
-    { position: [2.5, 0.5, -0.5] as [number, number, number], label: 'Grid Connect', type: 'grid', showAtPhase: 4 },
-  ], []);
+  const markers = useMemo(() => {
+    return placements.map((placement, i) => {
+      const seed = Math.floor((placement.x * 900 + placement.z * 1100) * 1000) + i * 13;
+      const rand = mulberry32(seed);
+      return {
+        x: toWorldCoord(placement.x),
+        z: toWorldCoord(placement.z),
+        label: placement.label,
+        type: placement.type,
+        stemHeight: 0.5 + rand() * 0.25,
+        floatPhase: rand() * Math.PI * 2,
+        showAtPhase: placement.type === 'grid' ? 4 : placement.type === 'optimal' || placement.type === 'battery' ? 3 : 2,
+      };
+    });
+  }, [placements]);
 
   useFrame((state) => {
     if (groupRef.current) {
       groupRef.current.children.forEach((child, i) => {
         if (markers[i]) {
-          child.position.y = markers[i].position[1] + Math.sin(state.clock.elapsedTime * 2 + i * 1.5) * 0.08;
+          const marker = markers[i];
+          const baseY = getSurfaceHeight(marker.x, marker.z);
+          child.position.y = baseY + marker.stemHeight + Math.sin(state.clock.elapsedTime * 2 + marker.floatPhase) * 0.08;
         }
       });
     }
@@ -675,7 +903,7 @@ function AnalysisMarkers({ phase, progress }: { phase: AnalysisPhase; progress: 
 
         return (
           <Float key={i} speed={2} rotationIntensity={0.1} floatIntensity={0.2}>
-            <group position={marker.position}>
+            <group position={[marker.x, getSurfaceHeight(marker.x, marker.z) + marker.stemHeight, marker.z]}>
               {/* Glowing orb */}
               <mesh>
                 <sphereGeometry args={[0.1, 24, 24]} />
@@ -698,8 +926,8 @@ function AnalysisMarkers({ phase, progress }: { phase: AnalysisPhase; progress: 
                 />
               </mesh>
               {/* Connection line */}
-              <mesh position={[0, -marker.position[1] / 2, 0]}>
-                <cylinderGeometry args={[0.008, 0.008, marker.position[1], 8]} />
+              <mesh position={[0, -marker.stemHeight / 2, 0]}>
+                <cylinderGeometry args={[0.008, 0.008, marker.stemHeight, 8]} />
                 <meshBasicMaterial
                   color={getMarkerColor(marker.type)}
                   transparent
@@ -848,6 +1076,17 @@ export function TerrainAnalysisScene({
   const [isEntering, setIsEntering] = useState(true);
   const [revealProgress, setRevealProgress] = useState(0);
   const [realElevationData, setRealElevationData] = useState<Float32Array | null>(null);
+  const fallbackPlan = useMemo(() => buildFallbackPlan(), []);
+  const [placementPlan, setPlacementPlan] = useState<PlacementPlan>(fallbackPlan);
+  const terrainData = useMemo(
+    () => buildTerrainHeightmap(realElevationData, TERRAIN_RESOLUTION),
+    [realElevationData]
+  );
+  const getSurfaceHeight = useMemo(() => {
+    const revealScale = Math.min(revealProgress * 2, 1);
+    return (x: number, z: number) =>
+      getTerrainSurfaceHeight(terrainData, TERRAIN_RESOLUTION, x, z, revealScale);
+  }, [terrainData, revealProgress]);
 
   useEffect(() => {
     setMounted(true);
@@ -867,6 +1106,45 @@ export function TerrainAnalysisScene({
         });
     }
   }, [polygon]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const gridSize = 10;
+    const grid = realElevationData
+      ? Array.from(realElevationData)
+      : downsampleTerrainData(terrainData, TERRAIN_RESOLUTION, gridSize);
+
+    const requestPlan = async () => {
+      try {
+        const res = await fetch('/api/terrain/placements', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ elevationGrid: grid, gridSize }),
+          signal: controller.signal,
+        });
+
+        if (!res.ok) throw new Error('Placement plan request failed');
+
+        const payload = await res.json();
+        if (!payload?.success || !payload?.data) {
+          throw new Error('Placement plan missing');
+        }
+
+        const normalized = normalizePlacementPlan(payload.data, fallbackPlan);
+        if (!cancelled) setPlacementPlan(normalized);
+      } catch (error) {
+        if (!cancelled) setPlacementPlan(fallbackPlan);
+      }
+    };
+
+    requestPlan();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [realElevationData, terrainData, fallbackPlan]);
 
   // Progressive reveal animation
   useEffect(() => {
@@ -940,14 +1218,29 @@ export function TerrainAnalysisScene({
               phase={phase}
               progress={progress}
               revealProgress={revealProgress}
-              realElevationData={realElevationData}
+              terrainData={terrainData}
             />
 
             {/* Progressive elements */}
             <EnergyParticles progress={progress} phase={phase} />
-            <SolarStructures phase={phase} progress={progress} />
-            <WindTurbines phase={phase} progress={progress} />
-            <AnalysisMarkers phase={phase} progress={progress} />
+            <SolarStructures
+              phase={phase}
+              progress={progress}
+              placements={placementPlan.solar}
+              getSurfaceHeight={getSurfaceHeight}
+            />
+            <WindTurbines
+              phase={phase}
+              progress={progress}
+              placements={placementPlan.wind}
+              getSurfaceHeight={getSurfaceHeight}
+            />
+            <AnalysisMarkers
+              phase={phase}
+              progress={progress}
+              placements={placementPlan.markers}
+              getSurfaceHeight={getSurfaceHeight}
+            />
             <GridFloor revealProgress={revealProgress} />
 
             {/* Ambient sparkles */}
