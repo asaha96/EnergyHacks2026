@@ -740,7 +740,7 @@ export default function AreaSelectPage() {
 
     // Close constraints sidebar and start the cinematic transition
     setIsConstraintsSidebarOpen(false);
-    setIsAgentSidebarOpen(false);
+    setIsAgentSidebarOpen(true);
     setAnalysisProgress(0);
     setIsTransitioningTo3D(true);
   }, [validation.canProceed]);
@@ -1338,7 +1338,7 @@ export default function AreaSelectPage() {
       </ConstraintsSidebar>
 
       <AgentSidebar
-        isOpen={isAgentSidebarOpen}
+        isOpen={isAgentSidebarOpen || show3DView}
         onClose={() => setIsAgentSidebarOpen(false)}
         onBack={handleBackToConstraints}
         onStop={handleStopAnalysis}
