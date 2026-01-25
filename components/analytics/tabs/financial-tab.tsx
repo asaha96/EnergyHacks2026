@@ -2,11 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  DollarSign, 
-  Percent, 
-  Calendar, 
-  PiggyBank, 
+import {
+  DollarSign,
+  Percent,
+  Calendar,
+  PiggyBank,
   BadgeCheck,
   Calculator,
   Building,
@@ -104,7 +104,7 @@ const INCENTIVE_COLORS: Record<IncentiveData['type'], string> = {
 function IncentiveRow({ incentive }: { incentive: IncentiveData }) {
   const Icon = INCENTIVE_ICONS[incentive.type];
   const colorClass = INCENTIVE_COLORS[incentive.type];
-  
+
   return (
     <motion.div
       variants={itemVariants}
@@ -153,7 +153,7 @@ const CATEGORY_LABELS: Record<EquipmentLineItem['category'], string> = {
 function EquipmentRow({ item }: { item: EquipmentLineItem }) {
   const Icon = CATEGORY_ICONS[item.category];
   const colorClass = CATEGORY_COLORS[item.category];
-  
+
   return (
     <div className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-0">
       <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -190,7 +190,7 @@ function EquipmentCategory({ category, items, defaultExpanded = false }: Equipme
   const Icon = CATEGORY_ICONS[category];
   const colorClass = CATEGORY_COLORS[category];
   const total = items.reduce((sum, item) => sum + item.totalPrice, 0);
-  
+
   return (
     <div className="border-b border-border last:border-0">
       <button
@@ -217,7 +217,7 @@ function EquipmentCategory({ category, items, defaultExpanded = false }: Equipme
           )}
         </div>
       </button>
-      
+
       <AnimatePresence>
         {isExpanded && (
           <motion.div
@@ -240,49 +240,41 @@ function EquipmentCategory({ category, items, defaultExpanded = false }: Equipme
 }
 
 export function FinancialTab({ plan, className }: FinancialTabProps) {
-  const planFinancials = plan?.financials;
   const financials = useMemo(() => {
-    if (!planFinancials) {
-      return {
-        totalCost: 0,
-        netCost: 0,
-        annualSavings: 0,
-        paybackYears: 0,
-        roi25Year: 0,
-      };
-    }
-
+    // HARDCODED DEMO DATA
     return {
-      totalCost: planFinancials.totalCost,
-      netCost: planFinancials.netCostAfterIncentives,
-      annualSavings: planFinancials.annualSavings,
-      paybackYears: planFinancials.paybackYears,
-      roi25Year: planFinancials.roi25Year,
+      totalCost: 6500000,
+      netCost: 4550000,
+      annualSavings: 1297006,
+      paybackYears: 3.51,
+      roi25Year: 32.0,
     };
-  }, [planFinancials]);
+  }, []);
 
-  const incentives = useMemo(() => generateIncentivesData(plan), [plan]);
-  const totalIncentives = useMemo(() => {
-    return incentives.reduce((sum, i) => sum + i.amount, 0);
-  }, [incentives]);
+  const incentives = useMemo(() => [
+    {
+      type: 'federal',
+      name: 'Federal Investment Tax Credit (ITC)',
+      description: '30% tax credit for renewable energy systems',
+      amount: 1950000, // 30% of 6.5M
+    } as IncentiveData
+  ], []);
 
-  const equipment = useMemo(() => generateEquipmentData(plan), [plan]);
+  const totalIncentives = 1950000;
+
+  const equipmentTotal = 6500000;
+
+  // Mock equipment categorization
   const equipmentByCategory = useMemo(() => {
-    const grouped: Record<EquipmentLineItem['category'], EquipmentLineItem[]> = {
-      solar: [],
-      wind: [],
-      storage: [],
-      bos: [],
-      installation: [],
+    return {
+      solar: [{ id: '1', name: 'Utility Scale PV Modules', model: 'High Efficiency Monocrystalline', category: 'solar' as const, quantity: 10000, unitPrice: 325, totalPrice: 3250000 }],
+      wind: [] as EquipmentLineItem[],
+      storage: [] as EquipmentLineItem[],
+      bos: [{ id: '2', name: 'Racking & Mounting', model: 'Ground Mount System', category: 'bos' as const, quantity: 1, unitPrice: 1300000, totalPrice: 1300000 }],
+      installation: [{ id: '3', name: 'Labor & Installation', model: 'Site Prep & Electrical', category: 'installation' as const, quantity: 1, unitPrice: 1300000, totalPrice: 1300000 },
+      { id: '4', name: 'Inverters', model: 'Utility String Inverters', category: 'bos' as const, quantity: 50, unitPrice: 13000, totalPrice: 650000 }]
     };
-    equipment.forEach(item => {
-      grouped[item.category].push(item);
-    });
-    return grouped;
-  }, [equipment]);
-  const equipmentTotal = useMemo(() => {
-    return equipment.reduce((sum, item) => sum + item.totalPrice, 0);
-  }, [equipment]);
+  }, []);
 
   return (
     <motion.div
@@ -399,7 +391,7 @@ export function FinancialTab({ plan, className }: FinancialTabProps) {
               Financing Scenarios
             </h4>
             <p className="text-xs text-muted-foreground mt-1">
-              Compare cash purchase, loan, and lease options with different 
+              Compare cash purchase, loan, and lease options with different
               terms to find the best financial fit for your situation.
             </p>
           </div>
