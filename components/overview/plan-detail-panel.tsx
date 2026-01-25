@@ -63,12 +63,12 @@ export function PlanDetailPanel({ plan, className }: PlanDetailPanelProps) {
           >
             <div className="p-6 space-y-6">
               <MetricsGrid
-                systemSizeKw={5000}
-                annualProductionKwh={9636000}
-                totalCost={6500000}
-                netCost={4550000}
+                systemSizeKw={346.154}
+                annualProductionKwh={667108}
+                totalCost={450000}
+                netCost={315000}
                 paybackYears={3.51}
-                annualSavings={1297006}
+                annualSavings={89793}
               />
 
               <SectionCards

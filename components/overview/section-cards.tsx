@@ -132,9 +132,9 @@ export function SectionCards({
   const metrics = useMemo(() => {
     // HARDCODED DEMO DATA
     return {
-      annualProduction: 9636000,
-      netCost: 4550000,
-      co2Offset: 3578,
+      annualProduction: 667108,
+      netCost: 315000,
+      co2Offset: 247.5,
     };
   }, []);
 
