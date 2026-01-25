@@ -2,8 +2,8 @@
 
 import { useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { 
-  OrbitControls, 
+import {
+  OrbitControls,
   PerspectiveCamera,
   Float,
   Sparkles
@@ -15,29 +15,29 @@ import type { AnalysisPhase } from '@/components/agent';
 // Generate realistic terrain heightmap using multiple noise octaves
 function generateTerrainData(width: number, height: number, seed: number = 42) {
   const data = new Float32Array(width * height);
-  
+
   const random = (x: number, y: number) => {
     const n = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453123;
     return n - Math.floor(n);
   };
-  
+
   const smoothNoise = (x: number, y: number, scale: number) => {
     const x0 = Math.floor(x / scale);
     const y0 = Math.floor(y / scale);
     const fx = (x / scale) - x0;
     const fy = (y / scale) - y0;
-    
+
     const v00 = random(x0, y0);
     const v10 = random(x0 + 1, y0);
     const v01 = random(x0, y0 + 1);
     const v11 = random(x0 + 1, y0 + 1);
-    
+
     const i1 = v00 * (1 - fx) + v10 * fx;
     const i2 = v01 * (1 - fx) + v11 * fx;
-    
+
     return i1 * (1 - fy) + i2 * fy;
   };
-  
+
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       let elevation = 0;
@@ -45,45 +45,45 @@ function generateTerrainData(width: number, height: number, seed: number = 42) {
       elevation += smoothNoise(x, y, 16) * 0.5;
       elevation += smoothNoise(x, y, 8) * 0.25;
       elevation += smoothNoise(x, y, 4) * 0.125;
-      
+
       const cx = x - width / 2;
       const cy = y - height / 2;
       const distFromCenter = Math.sqrt(cx * cx + cy * cy) / (width / 2);
       elevation += Math.max(0, 1 - distFromCenter * 1.2) * 0.5;
       elevation += Math.sin(x * 0.05) * Math.cos(y * 0.07) * 0.3;
-      
+
       data[y * width + x] = elevation;
     }
   }
-  
+
   return data;
 }
 
 // Enhanced terrain mesh with progressive detail and lush green colors
-function TerrainMesh({ 
-  phase, 
+function TerrainMesh({
+  phase,
   progress,
   revealProgress
-}: { 
+}: {
   phase: AnalysisPhase;
   progress: number;
   revealProgress: number;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.ShaderMaterial>(null);
-  
+
   const resolution = 128;
   const terrainData = useMemo(() => generateTerrainData(resolution, resolution), []);
-  
+
   const geometry = useMemo(() => {
     const geo = new THREE.PlaneGeometry(10, 10, resolution - 1, resolution - 1);
     const positions = geo.attributes.position.array as Float32Array;
-    
+
     for (let i = 0; i < terrainData.length; i++) {
       const elevation = terrainData[i];
       positions[i * 3 + 2] = elevation * 1.5;
     }
-    
+
     geo.computeVertexNormals();
     return geo;
   }, [terrainData]);
@@ -254,7 +254,7 @@ function TerrainMesh({
       materialRef.current.uniforms.uTime.value = state.clock.elapsedTime;
       materialRef.current.uniforms.uProgress.value = progress;
       materialRef.current.uniforms.uRevealProgress.value = revealProgress;
-      
+
       // Smooth elevation scale animation
       const targetScale = Math.min(revealProgress * 2, 1);
       materialRef.current.uniforms.uElevationScale.value = THREE.MathUtils.lerp(
@@ -262,7 +262,7 @@ function TerrainMesh({
         targetScale,
         0.05
       );
-      
+
       const phaseMap: Record<string, number> = {
         'data-collection': 0,
         'constraint-integration': 1,
@@ -273,16 +273,16 @@ function TerrainMesh({
       };
       materialRef.current.uniforms.uPhase.value = phaseMap[phase] || 0;
     }
-    
+
     if (meshRef.current) {
       meshRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 0.1) * 0.01;
     }
   });
 
   return (
-    <mesh 
-      ref={meshRef} 
-      geometry={geometry} 
+    <mesh
+      ref={meshRef}
+      geometry={geometry}
       rotation={[-Math.PI / 2, 0, 0]}
       position={[0, -0.5, 0]}
     >
@@ -295,34 +295,34 @@ function TerrainMesh({
 function EnergyParticles({ progress, phase }: { progress: number; phase: AnalysisPhase }) {
   const pointsRef = useRef<THREE.Points>(null);
   const phaseNum = ['data-collection', 'constraint-integration', 'technology-optimization', 'system-design', 'financial-modeling', 'complete'].indexOf(phase);
-  
+
   const particleCount = 300;
-  
+
   const [positions, colors, velocities] = useMemo(() => {
     const pos = new Float32Array(particleCount * 3);
     const col = new Float32Array(particleCount * 3);
     const vel = new Float32Array(particleCount * 3);
-    
+
     for (let i = 0; i < particleCount; i++) {
       // Spiral distribution around terrain
       const angle = (i / particleCount) * Math.PI * 8;
       const radius = 2 + (i / particleCount) * 4;
-      
+
       pos[i * 3] = Math.cos(angle) * radius;
       pos[i * 3 + 1] = -1 + Math.random() * 0.5;
       pos[i * 3 + 2] = Math.sin(angle) * radius;
-      
+
       // Green to gold gradient
       const t = i / particleCount;
       col[i * 3] = 0.2 + t * 0.6;
       col[i * 3 + 1] = 0.8 - t * 0.2;
       col[i * 3 + 2] = 0.3 + t * 0.2;
-      
+
       vel[i * 3] = (Math.random() - 0.5) * 0.02;
       vel[i * 3 + 1] = Math.random() * 0.03 + 0.01;
       vel[i * 3 + 2] = (Math.random() - 0.5) * 0.02;
     }
-    
+
     return [pos, col, vel];
   }, []);
 
@@ -330,17 +330,17 @@ function EnergyParticles({ progress, phase }: { progress: number; phase: Analysi
     if (pointsRef.current && phaseNum >= 1) {
       const pos = pointsRef.current.geometry.attributes.position.array as Float32Array;
       const visibleCount = Math.floor(particleCount * Math.min(progress * 1.5, 1));
-      
+
       for (let i = 0; i < visibleCount; i++) {
         pos[i * 3] += velocities[i * 3];
         pos[i * 3 + 1] += velocities[i * 3 + 1];
         pos[i * 3 + 2] += velocities[i * 3 + 2];
-        
+
         // Spiral upward motion
         const angle = state.clock.elapsedTime * 0.5 + (i / particleCount) * Math.PI * 2;
         pos[i * 3] += Math.cos(angle) * 0.002;
         pos[i * 3 + 2] += Math.sin(angle) * 0.002;
-        
+
         if (pos[i * 3 + 1] > 5) {
           pos[i * 3 + 1] = -1;
           const resetAngle = (i / particleCount) * Math.PI * 8;
@@ -349,7 +349,7 @@ function EnergyParticles({ progress, phase }: { progress: number; phase: Analysi
           pos[i * 3 + 2] = Math.sin(resetAngle) * resetRadius;
         }
       }
-      
+
       pointsRef.current.geometry.attributes.position.needsUpdate = true;
     }
   });
@@ -378,7 +378,7 @@ function EnergyParticles({ progress, phase }: { progress: number; phase: Analysi
 function SolarStructures({ phase, progress }: { phase: AnalysisPhase; progress: number }) {
   const groupRef = useRef<THREE.Group>(null);
   const phaseNum = ['data-collection', 'constraint-integration', 'technology-optimization', 'system-design', 'financial-modeling', 'complete'].indexOf(phase);
-  
+
   const structures = useMemo(() => {
     const items = [];
     // Generate solar array positions on the terrain
@@ -470,7 +470,7 @@ function SolarStructures({ phase, progress }: { phase: AnalysisPhase; progress: 
 function WindTurbines({ phase, progress }: { phase: AnalysisPhase; progress: number }) {
   const groupRef = useRef<THREE.Group>(null);
   const phaseNum = ['data-collection', 'constraint-integration', 'technology-optimization', 'system-design', 'financial-modeling', 'complete'].indexOf(phase);
-  
+
   const turbines = useMemo(() => [
     { position: [-3, 1.5, 2] as [number, number, number], scale: 0.4 },
     { position: [3.5, 1.2, -1.5] as [number, number, number], scale: 0.35 },
@@ -520,15 +520,15 @@ function WindTurbines({ phase, progress }: { phase: AnalysisPhase; progress: num
               opacity={turbineOpacity}
             />
           </mesh>
-          {/* Blades */}
+          {/* Blades - geometry centered at hub, extends outward */}
           <group name="blades" position={[0, 0, 0.16]}>
             {[0, 1, 2].map((blade) => (
               <mesh
                 key={blade}
                 rotation={[0, 0, (blade * Math.PI * 2) / 3]}
-                position={[0, 0.4, 0]}
               >
-                <boxGeometry args={[0.03, 0.8, 0.01]} />
+                {/* Blade geometry extends from 0 to 0.8, so we translate it to pivot around origin */}
+                <boxGeometry args={[0.03, 0.8, 0.01]} translate={[0, 0.4, 0]} />
                 <meshStandardMaterial
                   color="#f7fafc"
                   metalness={0.2}
@@ -549,7 +549,7 @@ function WindTurbines({ phase, progress }: { phase: AnalysisPhase; progress: num
 function AnalysisMarkers({ phase, progress }: { phase: AnalysisPhase; progress: number }) {
   const groupRef = useRef<THREE.Group>(null);
   const phaseNum = ['data-collection', 'constraint-integration', 'technology-optimization', 'system-design', 'financial-modeling', 'complete'].indexOf(phase);
-  
+
   const markers = useMemo(() => [
     { position: [1.8, 1.0, 1.5] as [number, number, number], label: 'Solar Zone A', type: 'solar', showAtPhase: 2 },
     { position: [-2.2, 0.8, 1.0] as [number, number, number], label: 'Wind Corridor', type: 'wind', showAtPhase: 2 },
@@ -584,9 +584,9 @@ function AnalysisMarkers({ phase, progress }: { phase: AnalysisPhase; progress: 
       {markers.map((marker, i) => {
         const isVisible = phaseNum >= marker.showAtPhase;
         const markerOpacity = isVisible ? Math.min((progress - marker.showAtPhase * 0.15) * 4, 1) : 0;
-        
+
         if (markerOpacity <= 0) return null;
-        
+
         return (
           <Float key={i} speed={2} rotationIntensity={0.1} floatIntensity={0.2}>
             <group position={marker.position}>
@@ -637,7 +637,7 @@ function AnalysisMarkers({ phase, progress }: { phase: AnalysisPhase; progress: 
 // Beautiful animated grid floor
 function GridFloor({ revealProgress }: { revealProgress: number }) {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
-  
+
   const gridMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
       uniforms: {
@@ -750,8 +750,8 @@ interface TerrainAnalysisSceneProps {
   onTransitionComplete?: () => void;
 }
 
-export function TerrainAnalysisScene({ 
-  phase, 
+export function TerrainAnalysisScene({
+  phase,
   progress,
   isVisible,
   onTransitionComplete
@@ -769,16 +769,16 @@ export function TerrainAnalysisScene({
     if (isVisible) {
       setIsEntering(true);
       setRevealProgress(0);
-      
+
       // Animate reveal progress
       const startTime = Date.now();
       const duration = 3000; // 3 seconds for full reveal
-      
+
       const animate = () => {
         const elapsed = Date.now() - startTime;
         const newProgress = Math.min(elapsed / duration, 1);
         setRevealProgress(newProgress);
-        
+
         if (newProgress < 1) {
           requestAnimationFrame(animate);
         } else {
@@ -786,7 +786,7 @@ export function TerrainAnalysisScene({
           onTransitionComplete?.();
         }
       };
-      
+
       requestAnimationFrame(animate);
     }
   }, [isVisible, onTransitionComplete]);
@@ -800,51 +800,51 @@ export function TerrainAnalysisScene({
           initial={{ opacity: 0, scale: 1.1 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ 
-            duration: 0.8, 
+          transition={{
+            duration: 0.8,
             ease: [0.22, 1, 0.36, 1]
           }}
-          className="absolute inset-0 z-0"
+          className="absolute top-0 bottom-0 left-0 right-[420px] z-0"
         >
           <Canvas
-            gl={{ 
-              antialias: true, 
+            gl={{
+              antialias: true,
               alpha: true,
               powerPreference: 'high-performance'
             }}
             dpr={[1, 2]}
           >
             <color attach="background" args={['#f8fafc']} />
-            
+
             <PerspectiveCamera makeDefault position={[12, 10, 12]} fov={45} />
             <CameraController phase={phase} isEntering={isEntering} />
-            
+
             {/* Lighting */}
             <ambientLight intensity={0.5} />
-            <directionalLight 
-              position={[10, 15, 8]} 
-              intensity={1.0} 
+            <directionalLight
+              position={[10, 15, 8]}
+              intensity={1.0}
               color="#fff7ed"
               castShadow
             />
             <pointLight position={[-8, 5, -8]} intensity={0.35} color="#86efac" />
             <pointLight position={[8, 3, 8]} intensity={0.25} color="#7dd3fc" />
             <hemisphereLight args={['#cfe8ff', '#b7e4c7', 0.35]} />
-            
+
             {/* Main terrain */}
-            <TerrainMesh 
-              phase={phase} 
-              progress={progress} 
+            <TerrainMesh
+              phase={phase}
+              progress={progress}
               revealProgress={revealProgress}
             />
-            
+
             {/* Progressive elements */}
             <EnergyParticles progress={progress} phase={phase} />
             <SolarStructures phase={phase} progress={progress} />
             <WindTurbines phase={phase} progress={progress} />
             <AnalysisMarkers phase={phase} progress={progress} />
             <GridFloor revealProgress={revealProgress} />
-            
+
             {/* Ambient sparkles */}
             <Sparkles
               count={80}
@@ -854,7 +854,7 @@ export function TerrainAnalysisScene({
               scale={14}
               color="#34d399"
             />
-            
+
             {/* Controls */}
             <OrbitControls
               enableZoom={true}
@@ -868,7 +868,7 @@ export function TerrainAnalysisScene({
               enableDamping
               dampingFactor={0.05}
             />
-            
+
             {/* Atmospheric fog */}
             <fog attach="fog" args={['#f8fafc', 14, 40]} />
           </Canvas>
