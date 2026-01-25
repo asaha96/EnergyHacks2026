@@ -243,9 +243,9 @@ export function FinancialTab({ plan, className }: FinancialTabProps) {
   const financials = useMemo(() => {
     // HARDCODED DEMO DATA
     return {
-      totalCost: 450000,
-      netCost: 315000,
-      annualSavings: 89793,
+      totalCost: 6500000,
+      netCost: 4550000,
+      annualSavings: 1297006,
       paybackYears: 3.51,
       roi25Year: 32.0,
     };
@@ -256,23 +256,23 @@ export function FinancialTab({ plan, className }: FinancialTabProps) {
       type: 'federal',
       name: 'Federal Investment Tax Credit (ITC)',
       description: '30% tax credit for renewable energy systems',
-      amount: 135000, // 30% of 450k
+      amount: 1950000, // 30% of 6.5M
     } as IncentiveData
   ], []);
 
-  const totalIncentives = 135000;
+  const totalIncentives = 1950000;
 
-  const equipmentTotal = 450000;
+  const equipmentTotal = 6500000;
 
   // Mock equipment categorization
   const equipmentByCategory = useMemo(() => {
     return {
-      solar: [{ id: '1', name: 'Utility Scale PV Modules', model: 'High Efficiency Monocrystalline', category: 'solar' as const, quantity: 450, unitPrice: 400, totalPrice: 180000 }],
+      solar: [{ id: '1', name: 'Utility Scale PV Modules', model: 'High Efficiency Monocrystalline', category: 'solar' as const, quantity: 10000, unitPrice: 325, totalPrice: 3250000 }],
       wind: [] as EquipmentLineItem[],
       storage: [] as EquipmentLineItem[],
-      bos: [{ id: '2', name: 'Racking & Mounting', model: 'Ground Mount System', category: 'bos' as const, quantity: 1, unitPrice: 90000, totalPrice: 90000 }],
-      installation: [{ id: '3', name: 'Labor & Installation', model: 'Site Prep & Electrical', category: 'installation' as const, quantity: 1, unitPrice: 90000, totalPrice: 90000 },
-      { id: '4', name: 'Inverters', model: 'Utility String Inverters', category: 'bos' as const, quantity: 9, unitPrice: 10000, totalPrice: 90000 }]
+      bos: [{ id: '2', name: 'Racking & Mounting', model: 'Ground Mount System', category: 'bos' as const, quantity: 1, unitPrice: 1300000, totalPrice: 1300000 }],
+      installation: [{ id: '3', name: 'Labor & Installation', model: 'Site Prep & Electrical', category: 'installation' as const, quantity: 1, unitPrice: 1300000, totalPrice: 1300000 },
+      { id: '4', name: 'Inverters', model: 'Utility String Inverters', category: 'bos' as const, quantity: 50, unitPrice: 13000, totalPrice: 650000 }]
     };
   }, []);
 
