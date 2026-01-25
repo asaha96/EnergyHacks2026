@@ -54,11 +54,6 @@ const TerrainAnalysisScene = nextDynamic(
   { ssr: false }
 );
 
-const AnalysisOverlay = nextDynamic(
-  () => import('@/components/3d/analysis-overlay').then((mod) => mod.AnalysisOverlay),
-  { ssr: false }
-);
-
 const MapTo3DTransition = nextDynamic(
   () => import('@/components/3d/map-transition').then((mod) => mod.MapTo3DTransition),
   { ssr: false }
@@ -738,9 +733,9 @@ export default function AreaSelectPage() {
     // PRIVACY-FIRST AI CHECK - REMOVED for Late Consent Flow
     // We now allow analysis to run freely. Consent is requested at Save.
 
-    // Close constraints sidebar and start the cinematic transition
+    // Close constraints sidebar and keep agent sidebar open for 3D view
     setIsConstraintsSidebarOpen(false);
-    setIsAgentSidebarOpen(false);
+    setIsAgentSidebarOpen(true);
     setAnalysisProgress(0);
     setIsTransitioningTo3D(true);
   }, [validation.canProceed]);
@@ -1150,19 +1145,7 @@ export default function AreaSelectPage() {
         isVisible={show3DView}
       />
       
-      {show3DView && (
-        <AnalysisOverlay
-          phase={currentPhase}
-          isAnalyzing={isAnalyzing}
-          progress={analysisProgress}
-          locationName={locationName}
-          areaAcres={prospectedArea ? calculateAreaWithUnits(prospectedArea).acres : undefined}
-          onBack={handleBackToConstraints}
-          onStop={isAnalyzing ? handleStopAnalysis : undefined}
-          onSave={currentPhase === 'complete' ? handleSavePlan : undefined}
-          isSaving={isSavingPlan}
-        />
-      )}
+      {/* AnalysisOverlay removed - using AgentSidebar instead */}
 
       <AnimatePresence>
         {!isProspecting && (
