@@ -1,12 +1,12 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Satellite, 
-  Database, 
-  Cpu, 
-  Zap, 
-  DollarSign, 
+import {
+  Satellite,
+  Database,
+  Cpu,
+  Zap,
+  DollarSign,
   CheckCircle2,
   Loader2,
   Mountain,
@@ -37,57 +37,57 @@ interface AnalysisOverlayProps {
   isSaving?: boolean;
 }
 
-const phases: { 
-  id: AnalysisPhase; 
-  label: string; 
+const phases: {
+  id: AnalysisPhase;
+  label: string;
   icon: LucideIcon;
   description: string;
 }[] = [
-  { 
-    id: 'data-collection', 
-    label: 'Data Collection', 
-    icon: Satellite,
-    description: 'Fetching satellite imagery & terrain data'
-  },
-  { 
-    id: 'constraint-integration', 
-    label: 'Constraint Analysis', 
-    icon: Database,
-    description: 'Mapping boundaries & exclusion zones'
-  },
-  { 
-    id: 'technology-optimization', 
-    label: 'Technology Optimization', 
-    icon: Cpu,
-    description: 'Evaluating solar & wind potential'
-  },
-  { 
-    id: 'system-design', 
-    label: 'System Design', 
-    icon: Zap,
-    description: 'Computing optimal equipment layout'
-  },
-  { 
-    id: 'financial-modeling', 
-    label: 'Financial Modeling', 
-    icon: DollarSign,
-    description: 'Calculating costs & projections'
-  },
-];
+    {
+      id: 'data-collection',
+      label: 'Data Collection',
+      icon: Satellite,
+      description: 'Fetching satellite imagery & terrain data'
+    },
+    {
+      id: 'constraint-integration',
+      label: 'Constraint Analysis',
+      icon: Database,
+      description: 'Mapping boundaries & exclusion zones'
+    },
+    {
+      id: 'technology-optimization',
+      label: 'Technology Optimization',
+      icon: Cpu,
+      description: 'Evaluating solar & wind potential'
+    },
+    {
+      id: 'system-design',
+      label: 'System Design',
+      icon: Zap,
+      description: 'Computing optimal equipment layout'
+    },
+    {
+      id: 'financial-modeling',
+      label: 'Financial Modeling',
+      icon: DollarSign,
+      description: 'Calculating costs & projections'
+    },
+  ];
 
-function PhaseIndicator({ 
-  phaseInfo, 
-  isActive, 
+function PhaseIndicator({
+  phaseInfo,
+  isActive,
   isComplete,
   index
-}: { 
+}: {
   phaseInfo: typeof phases[0];
   isActive: boolean;
   isComplete: boolean;
   index: number;
 }) {
   const IconComponent = phaseInfo.icon;
-  
+
   return (
     <motion.div
       initial={{ opacity: 0, x: -20 }}
@@ -119,7 +119,7 @@ function PhaseIndicator({
           <IconComponent className="w-5 h-5" />
         )}
       </div>
-      
+
       <div className="flex-1 min-w-0">
         <p className={[
           "font-medium text-sm",
@@ -204,7 +204,7 @@ export function AnalysisOverlay({
   return (
     <div className="absolute inset-0 z-10 pointer-events-none">
       {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-0 p-6 pointer-events-auto">
+      <div className="absolute top-0 left-0 right-[420px] p-6 pointer-events-auto">
         <div className="flex items-center justify-between">
           {/* Left - Back button and location */}
           <div className="flex items-center gap-4">
@@ -218,7 +218,7 @@ export function AnalysisOverlay({
                 <ArrowLeft className="h-5 w-5" />
               </Button>
             )}
-            
+
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -241,23 +241,7 @@ export function AnalysisOverlay({
             </motion.div>
           </div>
 
-          {/* Right - Stop button */}
-          {isAnalyzing && onStop && (
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-            >
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={onStop}
-                className="rounded-full gap-2"
-              >
-                <X className="w-4 h-4" />
-                Stop Analysis
-              </Button>
-            </motion.div>
-          )}
+          {/* Stop button removed - using sidebar button only */}
         </div>
       </div>
 
@@ -268,7 +252,7 @@ export function AnalysisOverlay({
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 40 }}
-            className="absolute bottom-6 left-1/2 -translate-x-1/2 pointer-events-auto"
+            className="absolute bottom-6 left-0 right-[420px] pointer-events-auto flex justify-center"
           >
             <div className="flex gap-3">
               <MetricCard

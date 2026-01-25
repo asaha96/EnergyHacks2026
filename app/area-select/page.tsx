@@ -96,7 +96,7 @@ export default function AreaSelectPage() {
     label: string;
   }>>([]);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
-  
+
   // -- 3D TERRAIN ANALYSIS STATE --
   const [show3DView, setShow3DView] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
@@ -748,7 +748,7 @@ export default function AreaSelectPage() {
   const handleTransitionComplete = useCallback(() => {
     setIsTransitioningTo3D(false);
     setShow3DView(true);
-    
+
     // Start the analysis after transition completes
     setTimeout(() => {
       runAnalysis();
@@ -760,6 +760,7 @@ export default function AreaSelectPage() {
     setShow3DView(false);
     setIsTransitioningTo3D(false);
     setAnalysisProgress(0);
+    setIsAgentSidebarOpen(false); // Close agent sidebar
     addAgentMessage('error', 'Analysis stopped by user');
   }, [addAgentMessage]);
 
@@ -1041,8 +1042,8 @@ export default function AreaSelectPage() {
     <div className="relative h-screen w-screen overflow-hidden bg-background">
       <motion.div
         initial={{ opacity: 0 }}
-        animate={{ 
-          opacity: (show3DView || isTransitioningTo3D) ? 0 : 1, 
+        animate={{
+          opacity: (show3DView || isTransitioningTo3D) ? 0 : 1,
           width: mapWidth,
           scale: (show3DView || isTransitioningTo3D) ? 0.95 : 1
         }}
@@ -1052,7 +1053,7 @@ export default function AreaSelectPage() {
           scale: { duration: 0.6 }
         }}
         className="absolute inset-0"
-        style={{ 
+        style={{
           width: mapWidth,
           pointerEvents: (show3DView || isTransitioningTo3D) ? 'none' : 'auto'
         }}
@@ -1149,7 +1150,7 @@ export default function AreaSelectPage() {
         progress={analysisProgress}
         isVisible={show3DView}
       />
-      
+
       {show3DView && (
         <AnalysisOverlay
           phase={currentPhase}
@@ -1165,7 +1166,7 @@ export default function AreaSelectPage() {
       )}
 
       <AnimatePresence>
-        {!isProspecting && !show3DView && !isTransitioningTo3D && (
+        {!isProspecting && !show3DView && !isTransitioningTo3D && !isAgentSidebarOpen && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
