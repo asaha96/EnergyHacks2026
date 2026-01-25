@@ -6,7 +6,6 @@ import {
   OrbitControls, 
   PerspectiveCamera,
   Float,
-  Stars,
   Sparkles
 } from '@react-three/drei';
 import * as THREE from 'three';
@@ -673,9 +672,9 @@ function GridFloor({ revealProgress }: { revealProgress: number }) {
           float pulse = 0.5 + 0.5 * sin(uTime * 0.8 - dist * 4.0);
           
           // Green-tinted grid
-          vec3 gridColor = vec3(0.15, 0.45, 0.35);
-          vec3 color = gridColor * line * fade * pulse * reveal;
-          float alpha = line * fade * 0.25 * reveal;
+           vec3 gridColor = vec3(0.22, 0.58, 0.48);
+           vec3 color = gridColor * line * fade * pulse * reveal;
+           float alpha = line * fade * 0.18 * reveal;
           
           gl_FragColor = vec4(color, alpha);
         }
@@ -815,22 +814,22 @@ export function TerrainAnalysisScene({
             }}
             dpr={[1, 2]}
           >
-            <color attach="background" args={['#0a1628']} />
+            <color attach="background" args={['#f8fafc']} />
             
             <PerspectiveCamera makeDefault position={[12, 10, 12]} fov={45} />
             <CameraController phase={phase} isEntering={isEntering} />
             
             {/* Lighting */}
-            <ambientLight intensity={0.3} />
+            <ambientLight intensity={0.5} />
             <directionalLight 
               position={[10, 15, 8]} 
-              intensity={1.2} 
-              color="#fff5e6"
+              intensity={1.0} 
+              color="#fff7ed"
               castShadow
             />
-            <pointLight position={[-8, 5, -8]} intensity={0.4} color="#4ade80" />
-            <pointLight position={[8, 3, 8]} intensity={0.3} color="#22d3ee" />
-            <hemisphereLight args={['#87ceeb', '#228b22', 0.3]} />
+            <pointLight position={[-8, 5, -8]} intensity={0.35} color="#86efac" />
+            <pointLight position={[8, 3, 8]} intensity={0.25} color="#7dd3fc" />
+            <hemisphereLight args={['#cfe8ff', '#b7e4c7', 0.35]} />
             
             {/* Main terrain */}
             <TerrainMesh 
@@ -848,22 +847,12 @@ export function TerrainAnalysisScene({
             
             {/* Ambient sparkles */}
             <Sparkles
-              count={100}
-              size={2}
-              speed={0.4}
-              opacity={0.5 * revealProgress}
-              scale={15}
-              color="#4ade80"
-            />
-            
-            {/* Stars background */}
-            <Stars 
-              radius={80} 
-              depth={50} 
-              count={1500} 
-              factor={4} 
-              fade 
-              speed={0.5}
+              count={80}
+              size={2.5}
+              speed={0.35}
+              opacity={0.45 * revealProgress}
+              scale={14}
+              color="#34d399"
             />
             
             {/* Controls */}
@@ -881,7 +870,7 @@ export function TerrainAnalysisScene({
             />
             
             {/* Atmospheric fog */}
-            <fog attach="fog" args={['#0a1628', 18, 45]} />
+            <fog attach="fog" args={['#f8fafc', 14, 40]} />
           </Canvas>
         </motion.div>
       )}

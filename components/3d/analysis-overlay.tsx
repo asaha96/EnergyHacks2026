@@ -94,17 +94,17 @@ function PhaseIndicator({
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.1 }}
       className={cn(
-        "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300",
-        isActive && "bg-primary/20 border border-primary/30",
-        isComplete && !isActive && "opacity-60",
-        !isActive && !isComplete && "opacity-30"
+        "flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-300",
+        isActive && "bg-white/85 border-primary/30 shadow-[0_12px_30px_-22px_rgba(16,185,129,0.45)]",
+        isComplete && !isActive && "bg-white/70 border-emerald-200/50 opacity-70",
+        !isActive && !isComplete && "bg-white/40 border-transparent opacity-35"
       )}
     >
       <div className={cn(
-        "w-10 h-10 rounded-full flex items-center justify-center transition-all",
-        isActive && "bg-primary text-primary-foreground shadow-lg shadow-primary/30",
-        isComplete && !isActive && "bg-green-500/20 text-green-400",
-        !isActive && !isComplete && "bg-muted text-muted-foreground"
+        "w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm",
+        isActive && "bg-primary/15 text-primary ring-1 ring-primary/30",
+        isComplete && !isActive && "bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-200/70",
+        !isActive && !isComplete && "bg-slate-100 text-slate-500"
       )}>
         {isComplete && !isActive ? (
           <CheckCircle2 className="w-5 h-5" />
@@ -124,7 +124,7 @@ function PhaseIndicator({
         <p className={[
           "font-medium text-sm",
           isActive ? "text-primary" : "",
-          isComplete && !isActive ? "text-green-400" : "",
+          isComplete && !isActive ? "text-emerald-600" : "",
           !isActive && !isComplete ? "text-muted-foreground" : ""
         ].filter(Boolean).join(" ")}>
           {phaseInfo.label}
@@ -171,7 +171,7 @@ function MetricCard({
       initial={{ opacity: 0, y: 20, scale: 0.9 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ delay, type: 'spring', damping: 20 }}
-      className="bg-background/60 backdrop-blur-md border border-border/50 rounded-xl p-4"
+      className="bg-white/80 backdrop-blur-md border border-emerald-100/70 rounded-xl p-4 shadow-lg"
     >
       <div className="flex items-center gap-2 mb-2">
         <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", color)}>
@@ -213,7 +213,7 @@ export function AnalysisOverlay({
                 variant="secondary"
                 size="icon"
                 onClick={onBack}
-                className="h-10 w-10 rounded-full bg-background/80 backdrop-blur-sm border border-border/50 shadow-lg"
+                className="h-10 w-10 rounded-full bg-white/80 backdrop-blur-sm border border-emerald-100/60 shadow-lg"
               >
                 <ArrowLeft className="h-5 w-5" />
               </Button>
@@ -222,10 +222,10 @@ export function AnalysisOverlay({
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="bg-background/80 backdrop-blur-md border border-border/50 rounded-2xl px-5 py-3 shadow-lg"
+              className="bg-white/85 backdrop-blur-md border border-emerald-100/60 rounded-2xl px-5 py-3 shadow-[0_20px_50px_-30px_rgba(15,23,42,0.35)]"
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-primary/15 ring-1 ring-primary/20 flex items-center justify-center">
                   <Mountain className="w-5 h-5 text-primary" />
                 </div>
                 <div>
@@ -267,7 +267,7 @@ export function AnalysisOverlay({
           initial={{ opacity: 0, x: -40 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-background/80 backdrop-blur-md border border-border/50 rounded-2xl p-4 shadow-xl"
+          className="bg-white/85 backdrop-blur-md border border-emerald-100/60 rounded-2xl p-4 shadow-[0_25px_60px_-35px_rgba(15,23,42,0.35)]"
         >
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-sm">Analysis Progress</h3>
@@ -277,9 +277,9 @@ export function AnalysisOverlay({
           </div>
           
           {/* Progress bar */}
-          <div className="h-1.5 bg-muted rounded-full mb-4 overflow-hidden">
+          <div className="h-1.5 bg-emerald-100/70 rounded-full mb-4 overflow-hidden">
             <motion.div
-              className="h-full bg-gradient-to-r from-primary via-primary to-green-500 rounded-full"
+              className="h-full bg-gradient-to-r from-primary via-emerald-400 to-lime-400 rounded-full"
               initial={{ width: 0 }}
               animate={{ width: `${progress * 100}%` }}
               transition={{ duration: 0.5 }}
@@ -307,13 +307,13 @@ export function AnalysisOverlay({
                 animate={{ opacity: 1, y: 0 }}
                 className="mt-4 space-y-3"
               >
-                <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
+                <div className="p-4 bg-emerald-500/10 border border-emerald-400/30 rounded-xl">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center">
                       <CheckCircle2 className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                      <p className="font-medium text-green-400">Analysis Complete</p>
+                      <p className="font-medium text-emerald-600">Analysis Complete</p>
                       <p className="text-xs text-muted-foreground">Ready to save your plan</p>
                     </div>
                   </div>
@@ -400,7 +400,7 @@ export function AnalysisOverlay({
             exit={{ opacity: 0 }}
             className="absolute bottom-6 right-6 pointer-events-none"
           >
-            <div className="flex items-center gap-2 bg-background/80 backdrop-blur-md border border-border/50 rounded-full px-4 py-2">
+            <div className="flex items-center gap-2 bg-white/85 backdrop-blur-md border border-emerald-100/60 rounded-full px-4 py-2 shadow-lg">
               <Loader2 className="w-4 h-4 animate-spin text-primary" />
               <span className="text-sm text-muted-foreground">Processing terrain data...</span>
             </div>
