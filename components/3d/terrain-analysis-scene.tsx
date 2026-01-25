@@ -5,7 +5,8 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { cn } from '@/lib/utils';
 import {
   OrbitControls,
-  PerspectiveCamera
+  PerspectiveCamera,
+  Html
 } from '@react-three/drei';
 import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -498,127 +499,206 @@ type PlacementZone = {
   x2: number;
   z2: number;
   suitability: number;
-  type: 'solar' | 'wind';
-};
-
-type SolarPlacement = {
-  x: number;
-  z: number;
-  tilt?: number;
-  scale?: number;
-  azimuth?: number;
-};
-
-type WindPlacement = {
-  x: number;
-  z: number;
-  height?: number;
-  scale?: number;
+  type: 'solar' | 'wind' | 'battery_storage' | 'agrivoltaic' | 'pollinator_habitat' | 'buffer';
+  id?: string;
+  name?: string;
+  estimatedCapacityMW?: number;
+  notes?: string;
 };
 
 type PlacementPlan = {
-  solar: SolarPlacement[];
-  wind: WindPlacement[];
-  zones?: PlacementZone[];
+  zones: PlacementZone[];
 };
 
-/**
- * Validates zone geometry to catch malformed zones from LLM
- * Checks: coordinate bounds, valid rectangle, minimum size, suitability range
- */
-function validateZone(zone: PlacementZone, polygonBounds: PolygonBounds): boolean {
-  const MIN_ZONE_SIZE = 0.05; // Relaxed size check
-  const SUITABILITY_MIN = -10; // Relaxed
-  const SUITABILITY_MAX = 110; // Relaxed
-  const COORD_MIN = -1.5; // Relaxed bounds
+function validateZone(zone: PlacementZone): boolean {
+  const MIN_ZONE_SIZE = 0.05;
+  const COORD_MIN = -1.5;
   const COORD_MAX = 1.5;
 
-  // Check coordinates are within bounds but lenient
   if (zone.x1 < COORD_MIN || zone.x1 > COORD_MAX) return false;
   if (zone.x2 < COORD_MIN || zone.x2 > COORD_MAX) return false;
   if (zone.z1 < COORD_MIN || zone.z1 > COORD_MAX) return false;
   if (zone.z2 < COORD_MIN || zone.z2 > COORD_MAX) return false;
 
-  // Check valid rectangle (allow small margin of error? no, swapped coords is bad)
   if (zone.x2 <= zone.x1) return false;
   if (zone.z2 <= zone.z1) return false;
 
-  // Check minimum size
   const width = zone.x2 - zone.x1;
   const height = zone.z2 - zone.z1;
   if (width < MIN_ZONE_SIZE || height < MIN_ZONE_SIZE) {
-    // console.warn('Zone too small', width, height);
     return false;
   }
 
   return true;
 }
 
-const SOLAR_SPACING = 0.08;
-const WIND_SPACING = 0.35;
+const ZONE_COLORS: Record<PlacementZone['type'], string> = {
+  solar: '#f59e0b',
+  wind: '#3b82f6',
+  battery_storage: '#8b5cf6',
+  agrivoltaic: '#10b981',
+  pollinator_habitat: '#ec4899',
+  buffer: '#6b7280',
+};
 
-function generatePlacementsFromZones(zones: PlacementZone[]): { solar: SolarPlacement[]; wind: WindPlacement[] } {
-  const solar: SolarPlacement[] = [];
-  const wind: WindPlacement[] = [];
+const ZONE_ICONS: Record<PlacementZone['type'], string> = {
+  solar: '\u2600',
+  wind: '\u2741',
+  battery_storage: '\u26A1',
+  agrivoltaic: '\u2618',
+  pollinator_habitat: '\u273F',
+  buffer: '\u26D4',
+};
 
-  for (const zone of zones) {
-    const width = zone.x2 - zone.x1;
-    const height = zone.z2 - zone.z1;
+function ZoneHighlightMesh({
+  zone,
+  getSurfaceHeight,
+  isSelected,
+  onSelect,
+  renderOrder,
+}: {
+  zone: {
+    x: number;
+    z: number;
+    width: number;
+    depth: number;
+    color: string;
+    type: PlacementZone['type'];
+  } & PlacementZone;
+  getSurfaceHeight: (x: number, z: number) => number;
+  isSelected: boolean;
+  onSelect: () => void;
+  renderOrder: number;
+}) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const resolution = 12;
 
-    if (zone.type === 'solar') {
-      const cols = Math.floor(width / SOLAR_SPACING);
-      const rows = Math.floor(height / SOLAR_SPACING);
-      const xOffset = (width - (cols - 1) * SOLAR_SPACING) / 2;
-      const zOffset = (height - (rows - 1) * SOLAR_SPACING) / 2;
+  const baseGeometry = useMemo(() => {
+    const geo = new THREE.PlaneGeometry(zone.width, zone.depth, resolution - 1, resolution - 1);
+    return geo;
+  }, [zone.width, zone.depth]);
 
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          const x = zone.x1 + xOffset + col * SOLAR_SPACING;
-          const z = zone.z1 + zOffset + row * SOLAR_SPACING;
-          solar.push({
-            x,
-            z,
-            tilt: 0.3 + Math.random() * 0.1,
-            scale: 0.25 + Math.random() * 0.08,
-            azimuth: Math.PI + (Math.random() - 0.5) * 0.2,
-          });
-        }
-      }
-    } else if (zone.type === 'wind') {
-      const cols = Math.max(1, Math.floor(width / WIND_SPACING));
-      const rows = Math.max(1, Math.floor(height / WIND_SPACING));
-      const xOffset = (width - (cols - 1) * WIND_SPACING) / 2;
-      const zOffset = (height - (rows - 1) * WIND_SPACING) / 2;
+  useFrame(() => {
+    if (!meshRef.current) return;
+    const geo = meshRef.current.geometry as THREE.PlaneGeometry;
+    const positions = geo.attributes.position.array as Float32Array;
 
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          const x = zone.x1 + xOffset + col * WIND_SPACING;
-          const z = zone.z1 + zOffset + row * WIND_SPACING;
-          wind.push({
-            x,
-            z,
-            height: 1.3 + Math.random() * 0.3,
-            scale: 0.35 + Math.random() * 0.1,
-          });
-        }
-      }
+    for (let i = 0; i < positions.length / 3; i++) {
+      const localX = positions[i * 3];
+      const localY = positions[i * 3 + 1];
+
+      const worldX = zone.x + localX;
+      const worldZ = zone.z - localY;
+
+      const height = getSurfaceHeight(worldX, worldZ) + 0.15;
+      positions[i * 3 + 2] = height;
     }
-  }
 
-  return { solar, wind };
+    geo.attributes.position.needsUpdate = true;
+    geo.computeVertexNormals();
+  });
+
+  const baseOpacity = zone.type === 'buffer' ? 0.3 : 0.55;
+  const opacity = isSelected ? 0.8 : baseOpacity;
+
+  return (
+    <mesh
+      ref={meshRef}
+      geometry={baseGeometry.clone()}
+      position={[zone.x, 0, zone.z]}
+      rotation={[-Math.PI / 2, 0, 0]}
+      renderOrder={renderOrder}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect();
+      }}
+      onPointerOver={(e) => {
+        e.stopPropagation();
+        document.body.style.cursor = 'pointer';
+      }}
+      onPointerOut={() => {
+        document.body.style.cursor = 'default';
+      }}
+    >
+      <meshBasicMaterial
+        color={zone.color}
+        transparent
+        opacity={opacity}
+        side={THREE.DoubleSide}
+        depthWrite={false}
+        depthTest={true}
+        polygonOffset={true}
+        polygonOffsetFactor={-4}
+        polygonOffsetUnits={-4}
+      />
+    </mesh>
+  );
+}
+
+function ZoneLabel({
+  x,
+  z,
+  color,
+  icon,
+  getSurfaceHeight,
+}: {
+  x: number;
+  z: number;
+  color: string;
+  icon: string;
+  getSurfaceHeight: (x: number, z: number) => number;
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+
+  useFrame(() => {
+    if (groupRef.current) {
+      groupRef.current.position.y = getSurfaceHeight(x, z) + 0.5;
+    }
+  });
+
+  return (
+    <group ref={groupRef} position={[x, getSurfaceHeight(x, z) + 0.5, z]}>
+      <Html
+        center
+        distanceFactor={8}
+        style={{
+          pointerEvents: 'none',
+        }}
+      >
+        <div
+          style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '8px',
+            backgroundColor: color,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '18px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+            border: '2px solid rgba(255,255,255,0.8)',
+          }}
+        >
+          {icon}
+        </div>
+      </Html>
+    </group>
+  );
 }
 
 function ZoneOverlays({
   zones,
   getSurfaceHeight,
   polygonBounds,
+  onZoneClick,
+  selectedZoneId,
 }: {
   zones: PlacementZone[];
   getSurfaceHeight: (x: number, z: number) => number;
   polygonBounds: PolygonBounds;
+  onZoneClick?: (zone: PlacementZone | null) => void;
+  selectedZoneId?: string | null;
 }) {
-  const groupRef = useRef<THREE.Group>(null);
-
   const processedZones = useMemo(() => {
     return zones.map((zone) => {
       const wx1 = toPolygonCoord(zone.x1, polygonBounds.minX, polygonBounds.maxX);
@@ -626,54 +706,53 @@ function ZoneOverlays({
       const wx2 = toPolygonCoord(zone.x2, polygonBounds.minX, polygonBounds.maxX);
       const wz2 = toPolygonCoord(zone.z2, polygonBounds.minZ, polygonBounds.maxZ);
 
-      const x = (wx1 + wx2) / 2;
-      const z = (wz1 + wz2) / 2;
+      const centerX = (wx1 + wx2) / 2;
+      const centerZ = (wz1 + wz2) / 2;
       const width = Math.abs(wx2 - wx1);
       const depth = Math.abs(wz2 - wz1);
 
-      // Ensure minimum size to be visible
-      const finalWidth = Math.max(width, 0.5);
-      const finalDepth = Math.max(depth, 0.5);
+      const color = ZONE_COLORS[zone.type] || '#6b7280';
 
       return {
         ...zone,
-        x,
-        z,
-        width: finalWidth,
-        depth: finalDepth,
-        y: getSurfaceHeight(x, z) + 0.05, // Slightly above terrain
+        x: centerX,
+        z: centerZ,
+        width: Math.max(width, 0.5),
+        depth: Math.max(depth, 0.5),
+        color,
+        labelX: wx1 + width * 0.12,
+        labelZ: wz1 + depth * 0.12,
       };
     });
-  }, [zones, polygonBounds, getSurfaceHeight]);
+  }, [zones, polygonBounds]);
 
   return (
-    <group ref={groupRef}>
-      {processedZones.map((zone, i) => (
-        <group key={i} position={[zone.x, zone.y, zone.z]}>
-          {/* Semi-transparent filled plane */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[zone.width, zone.depth]} />
-            <meshStandardMaterial
-              color={zone.type === 'solar' ? '#10b981' : '#3b82f6'}
-              transparent
-              opacity={(zone.suitability / 100) * 0.6}
-              side={THREE.DoubleSide}
-              depthWrite={false} // Prevent z-fighting with terrain
-            />
-          </mesh>
+    <group renderOrder={100}>
+      {processedZones.map((zone, i) => {
+        const isSelected = selectedZoneId === zone.id;
 
-          {/* Wireframe border */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
-            <boxGeometry args={[zone.width, zone.depth, 0.05]} />
-            <meshBasicMaterial
-              color={zone.type === 'solar' ? '#059669' : '#2563eb'}
-              wireframe
-              transparent
-              opacity={0.8}
+        return (
+          <group key={zone.id || i}>
+            <ZoneHighlightMesh
+              zone={zone}
+              getSurfaceHeight={getSurfaceHeight}
+              isSelected={isSelected}
+              onSelect={() => onZoneClick?.(isSelected ? null : zone)}
+              renderOrder={100 + i}
             />
-          </mesh>
-        </group>
-      ))}
+
+            {zone.type !== 'buffer' && (
+              <ZoneLabel
+                x={zone.labelX}
+                z={zone.labelZ}
+                color={zone.color}
+                icon={ZONE_ICONS[zone.type]}
+                getSurfaceHeight={getSurfaceHeight}
+              />
+            )}
+          </group>
+        );
+      })}
     </group>
   );
 }
@@ -1036,250 +1115,7 @@ function TerrainMesh({
   );
 }
 
-function SolarStructures({
-  phase,
-  progress,
-  placements,
-  getSurfaceHeight,
-  polygonBounds,
-}: {
-  phase: AnalysisPhase;
-  progress: number;
-  placements: SolarPlacement[];
-  getSurfaceHeight: (x: number, z: number) => number;
-  polygonBounds: PolygonBounds;
-}) {
-  const groupRef = useRef<THREE.Group>(null);
-  const phaseNum = ['data-collection', 'constraint-integration', 'technology-optimization', 'system-design', 'financial-modeling', 'complete'].indexOf(phase);
 
-  const structures = useMemo(() => {
-    return placements.map((placement, i) => {
-      const seed = Math.floor((placement.x * 1000 + placement.z * 2000) * 1000) + i * 19;
-      const rand = mulberry32(seed);
-      const x = toPolygonCoord(placement.x, polygonBounds.minX, polygonBounds.maxX);
-      const z = toPolygonCoord(placement.z, polygonBounds.minZ, polygonBounds.maxZ);
-
-      // Check if position is inside the polygon (if polygon exists)
-      const isInside = !polygonBounds.normalizedPolygon ||
-        isPointInPolygon(x, z, polygonBounds.normalizedPolygon);
-
-      return {
-        x,
-        z,
-        tilt: clampNumber(placement.tilt ?? (0.2 + rand() * 0.2), 0.12, 0.5),
-        scale: clampNumber(placement.scale ?? (0.28 + rand() * 0.18), 0.22, 0.5),
-        azimuth: placement.azimuth ?? rand() * Math.PI * 2,
-        postHeight: 0.28 + rand() * 0.28,
-        floatPhase: rand() * Math.PI * 2,
-        isInside,
-      };
-    }); // .filter(s => s.isInside) - Removed for demo visibility so fallback always shows
-  }, [placements, polygonBounds]);
-
-  useFrame(() => {
-    if (groupRef.current) {
-      groupRef.current.children.forEach((child, i) => {
-        const struct = structures[i];
-        if (!struct) return;
-        child.position.y = getSurfaceHeight(struct.x, struct.z);
-      });
-    }
-  });
-
-  const showStructures = phaseNum >= 3;
-  const structureOpacity = showStructures ? Math.min((progress - 0.5) * 4, 1) : 0;
-
-  if (!showStructures || structureOpacity <= 0) return null;
-
-  return (
-    <group ref={groupRef}>
-      {structures.map((struct, i) => (
-        <group
-          key={i}
-          position={[struct.x, getSurfaceHeight(struct.x, struct.z), struct.z]}
-          rotation={[0, struct.azimuth, 0]}
-        >
-          <mesh
-            position={[0, struct.postHeight, 0]}
-            rotation={[-struct.tilt, 0, 0]}
-            scale={[struct.scale, struct.scale, struct.scale]}
-          >
-            <boxGeometry args={[0.8, 0.02, 0.5]} />
-            <meshStandardMaterial
-              color="#1a365d"
-              metalness={0.8}
-              roughness={0.2}
-              transparent
-              opacity={structureOpacity}
-            />
-          </mesh>
-          <mesh
-            position={[0, struct.postHeight, 0]}
-            rotation={[-struct.tilt, 0, 0]}
-            scale={[struct.scale, struct.scale, struct.scale]}
-          >
-            <boxGeometry args={[0.85, 0.03, 0.55]} />
-            <meshStandardMaterial
-              color="#4a5568"
-              metalness={0.6}
-              roughness={0.4}
-              transparent
-              opacity={structureOpacity * 0.8}
-            />
-          </mesh>
-          <mesh position={[0, struct.postHeight / 2, 0]} scale={[struct.scale, 1, struct.scale]}>
-            <cylinderGeometry args={[0.02, 0.02, struct.postHeight, 8]} />
-            <meshStandardMaterial
-              color="#718096"
-              metalness={0.5}
-              roughness={0.5}
-              transparent
-              opacity={structureOpacity}
-            />
-          </mesh>
-          <pointLight
-            position={[0, struct.postHeight + 0.2, 0]}
-            color="#fbbf24"
-            intensity={structureOpacity * 0.3}
-            distance={1}
-          />
-        </group>
-      ))}
-    </group>
-  );
-}
-
-// Wind turbine structures
-function WindTurbines({
-  phase,
-  progress,
-  placements,
-  getSurfaceHeight,
-  polygonBounds,
-}: {
-  phase: AnalysisPhase;
-  progress: number;
-  placements: WindPlacement[];
-  getSurfaceHeight: (x: number, z: number) => number;
-  polygonBounds: PolygonBounds;
-}) {
-  const groupRef = useRef<THREE.Group>(null);
-  const phaseNum = ['data-collection', 'constraint-integration', 'technology-optimization', 'system-design', 'financial-modeling', 'complete'].indexOf(phase);
-
-  const turbines = useMemo(() => {
-    return placements.map((placement, i) => {
-      const seed = Math.floor((placement.x * 800 + placement.z * 900) * 1000) + i * 31;
-      const rand = mulberry32(seed);
-      const x = toPolygonCoord(placement.x, polygonBounds.minX, polygonBounds.maxX);
-      const z = toPolygonCoord(placement.z, polygonBounds.minZ, polygonBounds.maxZ);
-
-      // Check if position is inside the polygon (if polygon exists)
-      const isInside = !polygonBounds.normalizedPolygon ||
-        isPointInPolygon(x, z, polygonBounds.normalizedPolygon);
-
-      return {
-        x,
-        z,
-        height: clampNumber(placement.height ?? (1.25 + rand() * 0.35), 1.1, 1.8),
-        scale: clampNumber(placement.scale ?? (0.34 + rand() * 0.1), 0.3, 0.5),
-        isInside,
-      };
-    }); // .filter(t => t.isInside) - Removed for demo visibility so fallback always shows
-  }, [placements, polygonBounds]);
-
-  useFrame((state) => {
-    if (groupRef.current) {
-      groupRef.current.children.forEach((turbine, i) => {
-        const struct = turbines[i];
-        if (!struct) return;
-        turbine.position.y = getSurfaceHeight(struct.x, struct.z);
-
-        const blades = turbine.children.find(c => c.name === 'blades');
-        if (blades) {
-          blades.rotation.z = state.clock.elapsedTime * (0.5 + i * 0.1);
-        }
-      });
-    }
-  });
-
-  const showTurbines = phaseNum >= 3;
-  const turbineOpacity = showTurbines ? Math.min((progress - 0.6) * 5, 1) : 0;
-
-  if (!showTurbines || turbineOpacity <= 0) return null;
-
-  return (
-    <group ref={groupRef}>
-      {turbines.map((turbine, i) => {
-        const towerHeight = turbine.height * turbine.scale;
-
-        return (
-          <group
-            key={i}
-            position={[
-              turbine.x,
-              getSurfaceHeight(turbine.x, turbine.z),
-              turbine.z,
-            ]}
-          >
-            <mesh position={[0, towerHeight / 2, 0]}>
-              <cylinderGeometry args={[0.08 * turbine.scale, 0.12 * turbine.scale, towerHeight, 8]} />
-              <meshStandardMaterial
-                color="#e2e8f0"
-                metalness={0.3}
-                roughness={0.6}
-                transparent
-                opacity={turbineOpacity}
-              />
-            </mesh>
-            <mesh position={[0, towerHeight, 0]}>
-              <boxGeometry args={[0.15 * turbine.scale, 0.12 * turbine.scale, 0.3 * turbine.scale]} />
-              <meshStandardMaterial
-                color="#e2e8f0"
-                metalness={0.4}
-                roughness={0.5}
-                transparent
-                opacity={turbineOpacity}
-              />
-            </mesh>
-            <group name="blades" position={[0, towerHeight, 0.16 * turbine.scale]}>
-              {[0, 1, 2].map((blade) => (
-                <group
-                  key={blade}
-                  rotation={[0, 0, (blade * Math.PI * 2) / 3]}
-                >
-                  {/* Blade positioned to extend outward from hub center */}
-                  <mesh position={[0, 0.4 * turbine.scale, 0]}>
-                    <boxGeometry args={[0.03 * turbine.scale, 0.8 * turbine.scale, 0.01 * turbine.scale]} />
-                    <meshStandardMaterial
-                      color="#f7fafc"
-                      metalness={0.2}
-                      roughness={0.7}
-                      transparent
-                      opacity={turbineOpacity}
-                    />
-                  </mesh>
-                </group>
-              ))}
-              {/* Hub at center */}
-              <mesh>
-                <sphereGeometry args={[0.05 * turbine.scale, 8, 8]} />
-                <meshStandardMaterial
-                  color="#cbd5e1"
-                  metalness={0.5}
-                  roughness={0.4}
-                  transparent
-                  opacity={turbineOpacity}
-                />
-              </mesh>
-            </group>
-          </group>
-        );
-      })}
-    </group>
-  );
-}
-
-// Floating analysis markers with better animations
 // Beautiful animated grid floor
 function GridFloor({ revealProgress }: { revealProgress: number }) {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
@@ -1403,6 +1239,7 @@ export function TerrainAnalysisScene({
   const [elevationGridWidth, setElevationGridWidth] = useState<number | null>(null);
   const [elevationGridHeight, setElevationGridHeight] = useState<number | null>(null);
   const [placementPlan, setPlacementPlan] = useState<PlacementPlan | null>(null);
+  const [selectedZone, setSelectedZone] = useState<PlacementZone | null>(null);
   const draftConstraints = usePlanStore((state) => state.draftConstraints);
   const terrainData = useMemo(
     () => buildTerrainHeightmap(realElevationData, TERRAIN_RESOLUTION, elevationGridWidth, elevationGridHeight),
@@ -1522,15 +1359,9 @@ export function TerrainAnalysisScene({
             const parsed = parsePartialJson(jsonPart) as Partial<PlacementPlan>;
 
             if (parsed?.zones?.length) {
-              const validatedZones = parsed.zones.filter(z => validateZone(z, polygonBounds));
+              const validatedZones = parsed.zones.filter(z => validateZone(z));
               console.log('[Placements] Validated zones:', validatedZones.length);
-              const generated = generatePlacementsFromZones(validatedZones);
-              console.log('[Placements] Generated:', generated.solar.length, 'solar,', generated.wind.length, 'wind');
-              setPlacementPlan({
-                solar: generated.solar,
-                wind: generated.wind,
-                zones: validatedZones,
-              });
+              setPlacementPlan({ zones: validatedZones });
             }
           } catch {
             // partial-json couldn't parse yet
@@ -1544,23 +1375,17 @@ export function TerrainAnalysisScene({
             const jsonEnd = accumulated.lastIndexOf('}');
             if (jsonStart !== -1 && jsonEnd > jsonStart) {
               const finalJson = JSON.parse(accumulated.slice(jsonStart, jsonEnd + 1)) as PlacementPlan;
-              const validatedZones = (finalJson.zones ?? []).filter(z => validateZone(z, polygonBounds));
+              const validatedZones = (finalJson.zones ?? []).filter(z => validateZone(z));
 
               if (validatedZones.length === 0) {
                 throw new Error('No valid zones found in response');
               }
 
-              const generated = generatePlacementsFromZones(validatedZones);
-              console.log('[Placements] Final:', generated.solar.length, 'solar,', generated.wind.length, 'wind');
-              setPlacementPlan({
-                solar: generated.solar,
-                wind: generated.wind,
-                zones: validatedZones,
-              });
+              console.log('[Placements] Final zones:', validatedZones.length);
+              setPlacementPlan({ zones: validatedZones });
             }
           } catch (parseError) {
             console.error('[Placements] Failed to parse final JSON or no zones:', parseError);
-            // Trigger outer catch for fallback
             throw parseError;
           }
         }
@@ -1568,18 +1393,12 @@ export function TerrainAnalysisScene({
         if (!cancelled) {
           console.error('[Placements] Error:', error);
 
-          // HARDCODED FALLBACK FOR DEMO - Ensured success
           console.log('[Placements] Activating fallback demo data');
           const fallbackZones: PlacementZone[] = [
             { x1: -0.5, z1: 0.2, x2: 0.5, z2: 0.6, type: 'solar', suitability: 95 },
             { x1: 0.4, z1: -0.7, x2: 0.7, z2: -0.4, type: 'wind', suitability: 88 }
           ];
-          const generated = generatePlacementsFromZones(fallbackZones);
-          setPlacementPlan({
-            solar: generated.solar,
-            wind: generated.wind,
-            zones: fallbackZones,
-          });
+          setPlacementPlan({ zones: fallbackZones });
         }
       }
     };
@@ -1673,30 +1492,14 @@ export function TerrainAnalysisScene({
               resolution={TERRAIN_RESOLUTION}
               revealProgress={revealProgress}
             />
-            {placementPlan && (
-              <>
-                {placementPlan.zones && (
-                  <ZoneOverlays
-                    zones={placementPlan.zones}
-                    getSurfaceHeight={getSurfaceHeight}
-                    polygonBounds={polygonBounds}
-                  />
-                )}
-                <SolarStructures
-                  phase={phase}
-                  progress={progress}
-                  placements={placementPlan.solar}
-                  getSurfaceHeight={getSurfaceHeight}
-                  polygonBounds={polygonBounds}
-                />
-                <WindTurbines
-                  phase={phase}
-                  progress={progress}
-                  placements={placementPlan.wind}
-                  getSurfaceHeight={getSurfaceHeight}
-                  polygonBounds={polygonBounds}
-                />
-              </>
+            {placementPlan?.zones && (
+              <ZoneOverlays
+                zones={placementPlan.zones}
+                getSurfaceHeight={getSurfaceHeight}
+                polygonBounds={polygonBounds}
+                onZoneClick={setSelectedZone}
+                selectedZoneId={selectedZone?.id}
+              />
             )}
             <GridFloor revealProgress={revealProgress} />
 
@@ -1719,6 +1522,65 @@ export function TerrainAnalysisScene({
             {/* Atmospheric fog */}
             <fog attach="fog" args={['#f8fafc', 14, 40]} />
           </Canvas>
+
+          {selectedZone && (
+            <div className="absolute bottom-4 left-4 max-w-sm bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-gray-200 p-4 z-10">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">{ZONE_ICONS[selectedZone.type]}</span>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 text-sm">
+                      {selectedZone.name || selectedZone.id || 'Zone'}
+                    </h3>
+                    <p className="text-xs text-gray-500 capitalize">
+                      {selectedZone.type.replace('_', ' ')}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedZone(null)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Suitability</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${selectedZone.suitability}%`,
+                          backgroundColor: ZONE_COLORS[selectedZone.type],
+                        }}
+                      />
+                    </div>
+                    <span className="text-xs font-medium text-gray-700">{selectedZone.suitability}%</span>
+                  </div>
+                </div>
+
+                {selectedZone.estimatedCapacityMW && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500">Est. Capacity</span>
+                    <span className="text-xs font-medium text-gray-700">
+                      {selectedZone.estimatedCapacityMW} {selectedZone.type === 'battery_storage' ? 'MWh' : 'MW'}
+                    </span>
+                  </div>
+                )}
+
+                {selectedZone.notes && (
+                  <p className="text-xs text-gray-600 pt-2 border-t border-gray-100">
+                    {selectedZone.notes}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </motion.div>
       )}
     </AnimatePresence>
