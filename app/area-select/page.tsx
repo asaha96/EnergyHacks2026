@@ -1074,6 +1074,8 @@ export default function AreaSelectPage() {
           tileLayer={tileLayer}
           onMapReady={handleMapReady}
           className="h-full w-full"
+          center={[29.654, -97.991]}
+          zoom={12}
         >
           {isMapReady && (
             <>
