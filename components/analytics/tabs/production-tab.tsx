@@ -59,10 +59,10 @@ export function ProductionTab({ plan, className }: ProductionTabProps) {
   const metrics = useMemo(() => {
     // HARDCODED DEMO DATA
     return {
-      systemSize: '346.2 kW',
+      systemSize: '5,000.0 kW',
       // Let's override to match AnalysisOverlay text which user liked.
-      annualProduction: '667.1 MWh',
-      monthlyAverage: '55.6 MWh',
+      annualProduction: '9,636 MWh',
+      monthlyAverage: '803 MWh',
       capacityFactor: '22.0%',
     };
   }, []);

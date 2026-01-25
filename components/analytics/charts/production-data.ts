@@ -30,19 +30,19 @@ const SEASONAL_FACTORS = [
 ];
 
 export function generateMonthlyProductionData(plan: Plan | null): MonthlyProductionData[] {
-  // HARDCODED DEMO DATA
-  const monthlyValues = [
-    40026, 46698, 60040, 66711, 73382, 80053,
-    80053, 73382, 60040, 46698, 26684, 13341
-  ];
-  const average = 55592;
+  const annualProduction = plan?.analysis?.annualProductionKwh ?? 60000;
+  const monthlyAverage = annualProduction / 12;
 
   return MONTHS.map((month, index) => {
+    const seasonalFactor = SEASONAL_FACTORS[index];
+    const baseProduction = monthlyAverage * seasonalFactor;
+    const variance = 0.95 + Math.random() * 0.10;
+    
     return {
       month,
       shortMonth: SHORT_MONTHS[index],
-      production: monthlyValues[index],
-      average: average,
+      production: Math.round(baseProduction * variance),
+      average: Math.round(monthlyAverage),
     };
   });
 }

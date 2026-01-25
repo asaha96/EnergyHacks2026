@@ -526,7 +526,7 @@ export default function AreaSelectPage() {
       'data',
       'success',
       1400,
-      { detail: 'Annual avg: 5.2 kWh/m²/day solar, 8.3 mph wind' }
+      { detail: 'Annual avg: 4.2 kWh/m²/day solar, 8.3 mph wind' }
     );
 
     addAgentMessage('success', 'Data collection complete', {
@@ -543,7 +543,7 @@ export default function AreaSelectPage() {
       'processing',
       'success',
       900,
-      { value: `$400,000 - $500,000` }
+      { value: `$${budget[0].toLocaleString()} - $${budget[1].toLocaleString()}` }
     );
 
     await thinkThenComplete(
@@ -578,7 +578,7 @@ export default function AreaSelectPage() {
       'analysis',
       'success',
       1300,
-      { value: '1,927 kWh/kW/year potential' }
+      { value: '1,650 kWh/kW/year potential' }
     );
     showOverlay('solar');
 
@@ -638,7 +638,7 @@ export default function AreaSelectPage() {
     );
 
     addAgentMessage('info', '2 optimal zones identified for installation', {
-      detail: 'Zone A: Primary array (300 kW) | Zone B: Secondary (46 kW)'
+      detail: 'Zone A: Primary array (35 kW) | Zone B: Secondary (10 kW)'
     });
 
     if (prospectedArea) {
@@ -649,7 +649,7 @@ export default function AreaSelectPage() {
     await delay(600);
 
     addAgentMessage('success', 'System design finalized', {
-      value: '346.154 kW total capacity'
+      value: '45 kW total capacity'
     });
     setAnalysisProgress(0.8);
 
@@ -662,7 +662,7 @@ export default function AreaSelectPage() {
       'calculation',
       'success',
       1100,
-      { value: `$450,000 estimated` }
+      { value: `$${Math.round((budget[0] + budget[1]) / 2).toLocaleString()} estimated` }
     );
 
     await thinkThenComplete(
@@ -671,23 +671,23 @@ export default function AreaSelectPage() {
       'calculation',
       'insight',
       900,
-      { value: '30% tax credit', detail: '$135,000 in federal incentives' }
+      { value: '30% tax credit', detail: '$27,000+ in federal incentives' }
     );
 
     addAgentMessage('result', 'Estimated annual production', {
-      value: '667,108 kWh/year',
+      value: '58,500 kWh/year',
       detail: 'Based on local solar irradiance and system efficiency'
     });
     await delay(500);
 
     addAgentMessage('result', 'Projected payback period', {
-      value: '3.51 years',
+      value: '6.8 years',
       detail: 'Accounting for utility rate increases and degradation'
     });
     await delay(500);
 
     addAgentMessage('result', '25-year net savings', {
-      value: '$2,244,817',
+      value: '$147,200',
       detail: 'After system costs and maintenance'
     });
     setAnalysisProgress(1.0);
@@ -727,13 +727,13 @@ export default function AreaSelectPage() {
       timestamp: new Date(),
       status: 'completed',
       summaryData: {
-        systemSizeKw: 346.154,
-        annualProductionKwh: 667108,
-        totalCost: 450000,
-        netCost: 315000,
-        paybackYears: 3.51,
-        annualSavings: 89793,
-        co2OffsetTons: 247.5,
+        systemSizeKw: 45,
+        annualProductionKwh: 58500,
+        totalCost: avgBudget,
+        netCost: Math.round(avgBudget * 0.7),
+        paybackYears: 6.8,
+        annualSavings: Math.round(avgBudget / 6.8),
+        co2OffsetTons: 28.5,
         isSaving: false,
       },
     };
@@ -791,13 +791,13 @@ export default function AreaSelectPage() {
   const getAnalysisValues = useCallback(() => {
     const avgBudget = (budget[0] + budget[1]) / 2;
     return {
-      systemSizeKw: 346.154,
-      annualProductionKwh: 667108,
-      totalCost: 450000,
-      netCost: 315000,
-      paybackYears: 3.51,
-      annualSavings: 89793,
-      co2OffsetTons: 247.5,
+      systemSizeKw: 45,
+      annualProductionKwh: 58500,
+      totalCost: avgBudget,
+      netCost: Math.round(avgBudget * 0.7),
+      paybackYears: 6.8,
+      annualSavings: Math.round(avgBudget / 6.8),
+      co2OffsetTons: 28.5,
     };
   }, [budget]);
 
