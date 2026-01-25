@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMap } from 'react-leaflet';
-import L from 'leaflet';
 import type { PolygonCoordinates } from '../prospect-mode';
 
 export type OverlayType = 
@@ -64,51 +63,26 @@ interface BaseOverlayProps {
   onAnimationComplete?: () => void;
 }
 
-// Generate random gradient zones within the polygon bounds
-function generateGradientZones(
-  polygon: PolygonCoordinates[],
-  zoneCount: number = 8
-): L.LatLngBounds[] {
-  const bounds = L.latLngBounds(polygon.map((p: PolygonCoordinates) => [p.lat, p.lng] as L.LatLngTuple));
-  const zones: L.LatLngBounds[] = [];
-  
-  const sw = bounds.getSouthWest();
-  const ne = bounds.getNorthEast();
-  const latRange = ne.lat - sw.lat;
-  const lngRange = ne.lng - sw.lng;
-  
-  for (let i = 0; i < zoneCount; i++) {
-    const centerLat = sw.lat + (Math.random() * latRange);
-    const centerLng = sw.lng + (Math.random() * lngRange);
-    const size = 0.15 + (Math.random() * 0.25);
-    
-    zones.push(L.latLngBounds(
-      [centerLat - (latRange * size / 2), centerLng - (lngRange * size / 2)],
-      [centerLat + (latRange * size / 2), centerLng + (lngRange * size / 2)]
-    ));
-  }
-  
-  return zones;
+function useLeaflet() {
+  const [L, setL] = useState<typeof import('leaflet') | null>(null);
+
+  useEffect(() => {
+    import('leaflet').then(setL);
+  }, []);
+
+  return L;
 }
 
-// Create an SVG pattern for hatching
-function createHatchPattern(): string {
-  return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10">
-      <line x1="0" y1="10" x2="10" y2="0" stroke="#c0392b" stroke-width="1.5"/>
-    </svg>
-  `;
-}
-
-// Terrain Overlay - Heat map style elevation visualization
 export function TerrainOverlay({ polygon, visible, onAnimationComplete }: BaseOverlayProps) {
   const map = useMap();
-  const layersRef = useRef<L.Layer[]>([]);
+  const L = useLeaflet();
+  const layersRef = useRef<import('leaflet').Layer[]>([]);
   const animatingRef = useRef(false);
 
   useEffect(() => {
+    if (!L) return;
+
     if (!visible || animatingRef.current) {
-      // Clean up layers when not visible
       if (!visible) {
         layersRef.current.forEach(layer => map.removeLayer(layer));
         layersRef.current = [];
@@ -118,21 +92,30 @@ export function TerrainOverlay({ polygon, visible, onAnimationComplete }: BaseOv
 
     animatingRef.current = true;
     const config = OVERLAY_CONFIGS.terrain;
-    const zones = generateGradientZones(polygon, 12);
     
-    // Create polygon mask
+    const bounds = L.latLngBounds(polygon.map((p) => [p.lat, p.lng] as [number, number]));
+    const zones: import('leaflet').LatLngBounds[] = [];
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    const latRange = ne.lat - sw.lat;
+    const lngRange = ne.lng - sw.lng;
+    
+    for (let i = 0; i < 12; i++) {
+      const centerLat = sw.lat + (Math.random() * latRange);
+      const centerLng = sw.lng + (Math.random() * lngRange);
+      const size = 0.15 + (Math.random() * 0.25);
+      zones.push(L.latLngBounds(
+        [centerLat - (latRange * size / 2), centerLng - (lngRange * size / 2)],
+        [centerLat + (latRange * size / 2), centerLng + (lngRange * size / 2)]
+      ));
+    }
+
     const polygonLayer = L.polygon(
-      polygon.map((p: PolygonCoordinates) => [p.lat, p.lng] as L.LatLngTuple),
-      {
-        color: 'transparent',
-        fillColor: config.colors[0],
-        fillOpacity: 0,
-        weight: 0,
-      }
+      polygon.map((p) => [p.lat, p.lng] as [number, number]),
+      { color: 'transparent', fillColor: config.colors[0], fillOpacity: 0, weight: 0 }
     ).addTo(map);
     layersRef.current.push(polygonLayer);
 
-    // Create gradient zones with staggered animation
     zones.forEach((zoneBounds, index) => {
       const colorIndex = Math.floor(Math.random() * config.colors.length);
       
@@ -148,7 +131,6 @@ export function TerrainOverlay({ polygon, visible, onAnimationComplete }: BaseOv
         
         layersRef.current.push(rect);
         
-        // Animate opacity
         let opacity = 0;
         const targetOpacity = config.opacity * (0.6 + Math.random() * 0.4);
         const animate = () => {
@@ -170,18 +152,20 @@ export function TerrainOverlay({ polygon, visible, onAnimationComplete }: BaseOv
       layersRef.current = [];
       animatingRef.current = false;
     };
-  }, [map, polygon, visible, onAnimationComplete]);
+  }, [L, map, polygon, visible, onAnimationComplete]);
 
   return null;
 }
 
-// Solar Irradiance Overlay - Yellow-orange gradient
 export function SolarOverlay({ polygon, visible, onAnimationComplete }: BaseOverlayProps) {
   const map = useMap();
-  const layersRef = useRef<L.Layer[]>([]);
+  const L = useLeaflet();
+  const layersRef = useRef<import('leaflet').Layer[]>([]);
   const animatingRef = useRef(false);
 
   useEffect(() => {
+    if (!L) return;
+
     if (!visible || animatingRef.current) {
       if (!visible) {
         layersRef.current.forEach(layer => map.removeLayer(layer));
@@ -192,10 +176,25 @@ export function SolarOverlay({ polygon, visible, onAnimationComplete }: BaseOver
 
     animatingRef.current = true;
     const config = OVERLAY_CONFIGS.solar;
-    const zones = generateGradientZones(polygon, 10);
     
+    const bounds = L.latLngBounds(polygon.map((p) => [p.lat, p.lng] as [number, number]));
+    const zones: import('leaflet').LatLngBounds[] = [];
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    const latRange = ne.lat - sw.lat;
+    const lngRange = ne.lng - sw.lng;
+    
+    for (let i = 0; i < 10; i++) {
+      const centerLat = sw.lat + (Math.random() * latRange);
+      const centerLng = sw.lng + (Math.random() * lngRange);
+      const size = 0.15 + (Math.random() * 0.25);
+      zones.push(L.latLngBounds(
+        [centerLat - (latRange * size / 2), centerLng - (lngRange * size / 2)],
+        [centerLat + (latRange * size / 2), centerLng + (lngRange * size / 2)]
+      ));
+    }
+
     zones.forEach((zoneBounds, index) => {
-      // Bias toward warmer colors (higher irradiance)
       const colorIndex = Math.min(
         config.colors.length - 1,
         Math.floor(Math.random() * config.colors.length * 1.3)
@@ -234,18 +233,20 @@ export function SolarOverlay({ polygon, visible, onAnimationComplete }: BaseOver
       layersRef.current = [];
       animatingRef.current = false;
     };
-  }, [map, polygon, visible, onAnimationComplete]);
+  }, [L, map, polygon, visible, onAnimationComplete]);
 
   return null;
 }
 
-// Wind Potential Overlay - Blue gradient
 export function WindOverlay({ polygon, visible, onAnimationComplete }: BaseOverlayProps) {
   const map = useMap();
-  const layersRef = useRef<L.Layer[]>([]);
+  const L = useLeaflet();
+  const layersRef = useRef<import('leaflet').Layer[]>([]);
   const animatingRef = useRef(false);
 
   useEffect(() => {
+    if (!L) return;
+
     if (!visible || animatingRef.current) {
       if (!visible) {
         layersRef.current.forEach(layer => map.removeLayer(layer));
@@ -256,8 +257,24 @@ export function WindOverlay({ polygon, visible, onAnimationComplete }: BaseOverl
 
     animatingRef.current = true;
     const config = OVERLAY_CONFIGS.wind;
-    const zones = generateGradientZones(polygon, 8);
     
+    const bounds = L.latLngBounds(polygon.map((p) => [p.lat, p.lng] as [number, number]));
+    const zones: import('leaflet').LatLngBounds[] = [];
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    const latRange = ne.lat - sw.lat;
+    const lngRange = ne.lng - sw.lng;
+    
+    for (let i = 0; i < 8; i++) {
+      const centerLat = sw.lat + (Math.random() * latRange);
+      const centerLng = sw.lng + (Math.random() * lngRange);
+      const size = 0.15 + (Math.random() * 0.25);
+      zones.push(L.latLngBounds(
+        [centerLat - (latRange * size / 2), centerLng - (lngRange * size / 2)],
+        [centerLat + (latRange * size / 2), centerLng + (lngRange * size / 2)]
+      ));
+    }
+
     zones.forEach((zoneBounds, index) => {
       const colorIndex = Math.floor(Math.random() * config.colors.length);
       
@@ -294,18 +311,20 @@ export function WindOverlay({ polygon, visible, onAnimationComplete }: BaseOverl
       layersRef.current = [];
       animatingRef.current = false;
     };
-  }, [map, polygon, visible, onAnimationComplete]);
+  }, [L, map, polygon, visible, onAnimationComplete]);
 
   return null;
 }
 
-// Exclusion Zone Overlay - Red hatching pattern
 export function ExclusionOverlay({ polygon, visible, onAnimationComplete }: BaseOverlayProps) {
   const map = useMap();
-  const layersRef = useRef<L.Layer[]>([]);
+  const L = useLeaflet();
+  const layersRef = useRef<import('leaflet').Layer[]>([]);
   const animatingRef = useRef(false);
 
   useEffect(() => {
+    if (!L) return;
+
     if (!visible || animatingRef.current) {
       if (!visible) {
         layersRef.current.forEach(layer => map.removeLayer(layer));
@@ -316,22 +335,19 @@ export function ExclusionOverlay({ polygon, visible, onAnimationComplete }: Base
 
     animatingRef.current = true;
     const config = OVERLAY_CONFIGS.exclusion;
-    const bounds = L.latLngBounds(polygon.map((p: PolygonCoordinates) => [p.lat, p.lng] as L.LatLngTuple));
+    const bounds = L.latLngBounds(polygon.map((p) => [p.lat, p.lng] as [number, number]));
     
-    // Create 1-2 exclusion zones (simulating setbacks, wetlands, etc.)
-    const exclusionZones: L.LatLngBounds[] = [];
+    const exclusionZones: import('leaflet').LatLngBounds[] = [];
     const sw = bounds.getSouthWest();
     const ne = bounds.getNorthEast();
     const latRange = ne.lat - sw.lat;
     const lngRange = ne.lng - sw.lng;
     
-    // Corner exclusion (setback)
     exclusionZones.push(L.latLngBounds(
       [sw.lat, sw.lng],
       [sw.lat + latRange * 0.15, sw.lng + lngRange * 0.2]
     ));
     
-    // Random internal exclusion (wetland/creek)
     if (Math.random() > 0.3) {
       const centerLat = sw.lat + latRange * (0.4 + Math.random() * 0.3);
       const centerLng = sw.lng + lngRange * (0.3 + Math.random() * 0.4);
@@ -376,18 +392,20 @@ export function ExclusionOverlay({ polygon, visible, onAnimationComplete }: Base
       layersRef.current = [];
       animatingRef.current = false;
     };
-  }, [map, polygon, visible, onAnimationComplete]);
+  }, [L, map, polygon, visible, onAnimationComplete]);
 
   return null;
 }
 
-// Optimal Zone Overlay - Green highlighting for best placement
 export function OptimalOverlay({ polygon, visible, onAnimationComplete }: BaseOverlayProps) {
   const map = useMap();
-  const layersRef = useRef<L.Layer[]>([]);
+  const L = useLeaflet();
+  const layersRef = useRef<import('leaflet').Layer[]>([]);
   const animatingRef = useRef(false);
 
   useEffect(() => {
+    if (!L) return;
+
     if (!visible || animatingRef.current) {
       if (!visible) {
         layersRef.current.forEach(layer => map.removeLayer(layer));
@@ -398,16 +416,14 @@ export function OptimalOverlay({ polygon, visible, onAnimationComplete }: BaseOv
 
     animatingRef.current = true;
     const config = OVERLAY_CONFIGS.optimal;
-    const bounds = L.latLngBounds(polygon.map((p: PolygonCoordinates) => [p.lat, p.lng] as L.LatLngTuple));
+    const bounds = L.latLngBounds(polygon.map((p) => [p.lat, p.lng] as [number, number]));
     
-    // Create 2-3 optimal zones (the best spots for installation)
-    const optimalZones: L.LatLngBounds[] = [];
+    const optimalZones: import('leaflet').LatLngBounds[] = [];
     const sw = bounds.getSouthWest();
     const ne = bounds.getNorthEast();
     const latRange = ne.lat - sw.lat;
     const lngRange = ne.lng - sw.lng;
     
-    // Main optimal zone
     const mainLat = sw.lat + latRange * (0.3 + Math.random() * 0.2);
     const mainLng = sw.lng + lngRange * (0.4 + Math.random() * 0.2);
     optimalZones.push(L.latLngBounds(
@@ -415,7 +431,6 @@ export function OptimalOverlay({ polygon, visible, onAnimationComplete }: BaseOv
       [mainLat + latRange * 0.35, mainLng + lngRange * 0.4]
     ));
     
-    // Secondary optimal zone
     const secLat = sw.lat + latRange * (0.55 + Math.random() * 0.2);
     const secLng = sw.lng + lngRange * (0.1 + Math.random() * 0.2);
     optimalZones.push(L.latLngBounds(
@@ -457,7 +472,7 @@ export function OptimalOverlay({ polygon, visible, onAnimationComplete }: BaseOv
       layersRef.current = [];
       animatingRef.current = false;
     };
-  }, [map, polygon, visible, onAnimationComplete]);
+  }, [L, map, polygon, visible, onAnimationComplete]);
 
   return null;
 }
