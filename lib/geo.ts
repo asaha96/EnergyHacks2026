@@ -145,3 +145,47 @@ export function calculateBounds(coordinates: Coordinate[]): {
 
   return { north, south, east, west };
 }
+
+/**
+ * Fetch elevation data grid from Open-Meteo
+ * Limited to 100 points per request (10x10 grid)
+ */
+export async function fetchElevationGrid(
+  center: Coordinate,
+  radiusMeters: number,
+  gridSize: number = 10
+): Promise<Float32Array> {
+  // Generate grid coordinates
+  const lats: number[] = [];
+  const lngs: number[] = [];
+  const step = (radiusMeters * 2) / (gridSize - 1);
+  
+  // Simple flat earth approximation for small areas
+  const latStepDeg = step / 111320; 
+  const lngStepDeg = step / (111320 * Math.cos(toRadians(center.lat)));
+
+  const startLat = center.lat - (latStepDeg * (gridSize - 1)) / 2;
+  const startLng = center.lng - (lngStepDeg * (gridSize - 1)) / 2;
+
+  // Row-major order (y then x) to match typical heightmap layout
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      lats.push(startLat + y * latStepDeg);
+      lngs.push(startLng + x * lngStepDeg);
+    }
+  }
+
+  // Batch request to Open-Meteo
+  const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats.join(',')}&longitude=${lngs.join(',')}`;
+  
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Failed to fetch elevation data');
+    const data = await res.json();
+    return new Float32Array(data.elevation);
+  } catch (error) {
+    console.warn('Error fetching elevation data, falling back to flat terrain:', error);
+    return new Float32Array(gridSize * gridSize).fill(0);
+  }
+}
+
