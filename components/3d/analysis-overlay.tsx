@@ -35,6 +35,7 @@ interface AnalysisOverlayProps {
   onStop?: () => void;
   onSave?: () => void;
   isSaving?: boolean;
+  className?: string;
 }
 
 const phases: {
@@ -196,15 +197,16 @@ export function AnalysisOverlay({
   onBack,
   onStop,
   onSave,
-  isSaving
+  isSaving,
+  className
 }: AnalysisOverlayProps) {
   const currentPhaseIndex = phases.findIndex(p => p.id === phase);
   const isComplete = phase === 'complete';
 
   return (
-    <div className="absolute inset-0 z-10 pointer-events-none">
+    <div className={cn("absolute inset-0 z-10 pointer-events-none", className)}>
       {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-[420px] p-6 pointer-events-auto">
+      <div className="absolute top-0 left-0 right-0 p-6 pointer-events-auto">
         <div className="flex items-center justify-between">
           {/* Left - Back button and location */}
           <div className="flex items-center gap-4">
@@ -252,13 +254,13 @@ export function AnalysisOverlay({
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 40 }}
-            className="absolute bottom-6 left-0 right-[420px] pointer-events-auto flex justify-center"
+            className="absolute bottom-6 left-0 right-0 pointer-events-auto flex justify-center"
           >
             <div className="flex gap-3">
               <MetricCard
                 icon={Sun}
                 label="Solar Potential"
-                value="1,650"
+                value="1,737"
                 suffix="kWh/kW/yr"
                 color="bg-amber-500/20 text-amber-400"
                 delay={0}
@@ -266,7 +268,7 @@ export function AnalysisOverlay({
               <MetricCard
                 icon={Wind}
                 label="Wind Speed"
-                value="8.3"
+                value="14.3"
                 suffix="mph avg"
                 color="bg-blue-500/20 text-blue-400"
                 delay={0.1}
@@ -274,7 +276,7 @@ export function AnalysisOverlay({
               <MetricCard
                 icon={Battery}
                 label="System Size"
-                value="45"
+                value="48"
                 suffix="kW"
                 color="bg-green-500/20 text-green-400"
                 delay={0.2}
@@ -282,7 +284,7 @@ export function AnalysisOverlay({
               <MetricCard
                 icon={TrendingUp}
                 label="Annual Output"
-                value="58.5"
+                value="62.5"
                 suffix="MWh"
                 color="bg-purple-500/20 text-purple-400"
                 delay={0.3}
