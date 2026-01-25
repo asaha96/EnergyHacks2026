@@ -260,7 +260,7 @@ export function AnalysisOverlay({
               <MetricCard
                 icon={Sun}
                 label="Solar Potential"
-                value="1,737"
+                value="1,927"
                 suffix="kWh/kW/yr"
                 color="bg-amber-500/20 text-amber-400"
                 delay={0}
@@ -276,7 +276,7 @@ export function AnalysisOverlay({
               <MetricCard
                 icon={Battery}
                 label="System Size"
-                value="48"
+                value="5,000"
                 suffix="kW"
                 color="bg-green-500/20 text-green-400"
                 delay={0.2}
@@ -284,7 +284,7 @@ export function AnalysisOverlay({
               <MetricCard
                 icon={TrendingUp}
                 label="Annual Output"
-                value="62.5"
+                value="9,636"
                 suffix="MWh"
                 color="bg-purple-500/20 text-purple-400"
                 delay={0.3}
