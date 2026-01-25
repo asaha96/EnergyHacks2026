@@ -4,15 +4,23 @@ import { useRef, useMemo, useEffect, useState, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import {
   OrbitControls,
-  PerspectiveCamera,
-  Float,
-  Sparkles
+  PerspectiveCamera
 } from '@react-three/drei';
 import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
+import { parse as parsePartialJson } from 'partial-json';
 import type { AnalysisPhase } from '@/components/agent';
 import { PolygonCoordinates } from '@/components/map';
-import { calculateCentroid, fetchElevationGrid } from '@/lib/geo';
+import {
+  calculateCentroid,
+  fetchElevationGrid,
+  calculateSlope,
+  calculateAspect,
+  calculateSolarSuitability,
+  calculateWindSuitability,
+  calculateBounds,
+} from '@/lib/geo';
+import { usePlanStore } from '@/stores/plan-store';
 
 const TERRAIN_RESOLUTION = 128;
 const TERRAIN_SIZE = 10;
@@ -483,6 +491,15 @@ function TerrainCrossSection({
 
 
 
+type PlacementZone = {
+  x1: number;
+  z1: number;
+  x2: number;
+  z2: number;
+  suitability: number;
+  type: 'solar' | 'wind';
+};
+
 type SolarPlacement = {
   x: number;
   z: number;
@@ -498,18 +515,195 @@ type WindPlacement = {
   scale?: number;
 };
 
-type MarkerPlacement = {
-  x: number;
-  z: number;
-  label: string;
-  type: 'solar' | 'wind' | 'optimal' | 'battery' | 'grid';
-};
-
 type PlacementPlan = {
   solar: SolarPlacement[];
   wind: WindPlacement[];
-  markers: MarkerPlacement[];
+  zones?: PlacementZone[];
 };
+
+/**
+ * Validates zone geometry to catch malformed zones from LLM
+ * Checks: coordinate bounds, valid rectangle, minimum size, suitability range
+ */
+function validateZone(zone: PlacementZone, polygonBounds: PolygonBounds): boolean {
+  const MIN_ZONE_SIZE = 0.1; // 10% of terrain size
+  const SUITABILITY_MIN = 0;
+  const SUITABILITY_MAX = 100;
+  const COORD_MIN = -1;
+  const COORD_MAX = 1;
+
+  // Check coordinates are within bounds [-1, 1]
+  if (zone.x1 < COORD_MIN || zone.x1 > COORD_MAX) {
+    console.warn(`Invalid zone: x1=${zone.x1} out of bounds [-1, 1]`, zone);
+    return false;
+  }
+  if (zone.x2 < COORD_MIN || zone.x2 > COORD_MAX) {
+    console.warn(`Invalid zone: x2=${zone.x2} out of bounds [-1, 1]`, zone);
+    return false;
+  }
+  if (zone.z1 < COORD_MIN || zone.z1 > COORD_MAX) {
+    console.warn(`Invalid zone: z1=${zone.z1} out of bounds [-1, 1]`, zone);
+    return false;
+  }
+  if (zone.z2 < COORD_MIN || zone.z2 > COORD_MAX) {
+    console.warn(`Invalid zone: z2=${zone.z2} out of bounds [-1, 1]`, zone);
+    return false;
+  }
+
+  // Check valid rectangle: x2 > x1 and z2 > z1
+  if (zone.x2 <= zone.x1) {
+    console.warn(`Invalid zone: x2 (${zone.x2}) must be > x1 (${zone.x1})`, zone);
+    return false;
+  }
+  if (zone.z2 <= zone.z1) {
+    console.warn(`Invalid zone: z2 (${zone.z2}) must be > z1 (${zone.z1})`, zone);
+    return false;
+  }
+
+  // Check minimum size
+  const width = zone.x2 - zone.x1;
+  const height = zone.z2 - zone.z1;
+  if (width < MIN_ZONE_SIZE) {
+    console.warn(`Invalid zone: width=${width} < minimum ${MIN_ZONE_SIZE}`, zone);
+    return false;
+  }
+  if (height < MIN_ZONE_SIZE) {
+    console.warn(`Invalid zone: height=${height} < minimum ${MIN_ZONE_SIZE}`, zone);
+    return false;
+  }
+
+  // Check suitability is in valid range [0, 100]
+  if (zone.suitability < SUITABILITY_MIN || zone.suitability > SUITABILITY_MAX) {
+    console.warn(`Invalid zone: suitability=${zone.suitability} out of range [0, 100]`, zone);
+    return false;
+  }
+
+  return true;
+}
+
+const SOLAR_SPACING = 0.08;
+const WIND_SPACING = 0.35;
+
+function generatePlacementsFromZones(zones: PlacementZone[]): { solar: SolarPlacement[]; wind: WindPlacement[] } {
+  const solar: SolarPlacement[] = [];
+  const wind: WindPlacement[] = [];
+  
+  for (const zone of zones) {
+    const width = zone.x2 - zone.x1;
+    const height = zone.z2 - zone.z1;
+    
+    if (zone.type === 'solar') {
+      const cols = Math.floor(width / SOLAR_SPACING);
+      const rows = Math.floor(height / SOLAR_SPACING);
+      const xOffset = (width - (cols - 1) * SOLAR_SPACING) / 2;
+      const zOffset = (height - (rows - 1) * SOLAR_SPACING) / 2;
+      
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const x = zone.x1 + xOffset + col * SOLAR_SPACING;
+          const z = zone.z1 + zOffset + row * SOLAR_SPACING;
+          solar.push({
+            x,
+            z,
+            tilt: 0.3 + Math.random() * 0.1,
+            scale: 0.25 + Math.random() * 0.08,
+            azimuth: Math.PI + (Math.random() - 0.5) * 0.2,
+          });
+        }
+      }
+    } else if (zone.type === 'wind') {
+      const cols = Math.max(1, Math.floor(width / WIND_SPACING));
+      const rows = Math.max(1, Math.floor(height / WIND_SPACING));
+      const xOffset = (width - (cols - 1) * WIND_SPACING) / 2;
+      const zOffset = (height - (rows - 1) * WIND_SPACING) / 2;
+      
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const x = zone.x1 + xOffset + col * WIND_SPACING;
+          const z = zone.z1 + zOffset + row * WIND_SPACING;
+          wind.push({
+            x,
+            z,
+            height: 1.3 + Math.random() * 0.3,
+            scale: 0.35 + Math.random() * 0.1,
+          });
+        }
+      }
+    }
+  }
+  
+  return { solar, wind };
+}
+
+function ZoneOverlays({
+  zones,
+  getSurfaceHeight,
+  polygonBounds,
+}: {
+  zones: PlacementZone[];
+  getSurfaceHeight: (x: number, z: number) => number;
+  polygonBounds: PolygonBounds;
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+
+  const processedZones = useMemo(() => {
+    return zones.map((zone) => {
+      const wx1 = toPolygonCoord(zone.x1, polygonBounds.minX, polygonBounds.maxX);
+      const wz1 = toPolygonCoord(zone.z1, polygonBounds.minZ, polygonBounds.maxZ);
+      const wx2 = toPolygonCoord(zone.x2, polygonBounds.minX, polygonBounds.maxX);
+      const wz2 = toPolygonCoord(zone.z2, polygonBounds.minZ, polygonBounds.maxZ);
+
+      const x = (wx1 + wx2) / 2;
+      const z = (wz1 + wz2) / 2;
+      const width = Math.abs(wx2 - wx1);
+      const depth = Math.abs(wz2 - wz1);
+      
+      // Ensure minimum size to be visible
+      const finalWidth = Math.max(width, 0.5);
+      const finalDepth = Math.max(depth, 0.5);
+
+      return {
+        ...zone,
+        x,
+        z,
+        width: finalWidth,
+        depth: finalDepth,
+        y: getSurfaceHeight(x, z) + 0.05, // Slightly above terrain
+      };
+    });
+  }, [zones, polygonBounds, getSurfaceHeight]);
+
+  return (
+    <group ref={groupRef}>
+      {processedZones.map((zone, i) => (
+        <group key={i} position={[zone.x, zone.y, zone.z]}>
+          {/* Semi-transparent filled plane */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[zone.width, zone.depth]} />
+            <meshStandardMaterial
+              color={zone.type === 'solar' ? '#10b981' : '#3b82f6'}
+              transparent
+              opacity={(zone.suitability / 100) * 0.6}
+              side={THREE.DoubleSide}
+              depthWrite={false} // Prevent z-fighting with terrain
+            />
+          </mesh>
+          
+          {/* Wireframe border */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+            <boxGeometry args={[zone.width, zone.depth, 0.05]} />
+            <meshBasicMaterial
+              color={zone.type === 'solar' ? '#059669' : '#2563eb'}
+              wireframe
+              transparent
+              opacity={0.8}
+            />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
 
 // Generate realistic terrain heightmap using multiple noise octaves
 function generateTerrainData(width: number, height: number, seed: number = 42) {
@@ -604,11 +798,6 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function toFiniteNumber(value: unknown, fallback: number) {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : fallback;
-}
-
 function buildTerrainHeightmap(realElevationData: Float32Array | null, resolution: number) {
   if (realElevationData && realElevationData.length === 100) {
     const data = new Float32Array(resolution * resolution);
@@ -689,90 +878,7 @@ function downsampleTerrainData(
   return downsampled;
 }
 
-function toWorldCoord(value: number) {
-  return clampNumber(value, -1, 1) * PLACEMENT_BOUND;
-}
 
-const DEFAULT_MARKERS: MarkerPlacement[] = [
-  { x: 0.3, z: 0.25, label: 'Solar Zone A', type: 'solar' },
-  { x: -0.35, z: 0.18, label: 'Wind Corridor', type: 'wind' },
-  { x: 0.1, z: -0.35, label: 'Optimal Site', type: 'optimal' },
-  { x: -0.25, z: -0.3, label: 'Battery Storage', type: 'battery' },
-  { x: 0.4, z: -0.1, label: 'Grid Connect', type: 'grid' },
-];
-
-function buildFallbackPlan(): PlacementPlan {
-  const solar: SolarPlacement[] = [];
-  const wind: WindPlacement[] = [
-    { x: -0.45, z: 0.35, height: 1.45, scale: 0.4 },
-    { x: 0.5, z: -0.25, height: 1.3, scale: 0.36 },
-    { x: -0.25, z: -0.5, height: 1.38, scale: 0.38 },
-  ];
-
-  for (let i = 0; i < 12; i++) {
-    const rand = mulberry32(200 + i * 37)();
-    const angle = (i / 12) * Math.PI * 2;
-    // Reduced radius to keep solar panels centered on terrain
-    const radius = 0.25 + rand * 0.35;
-    solar.push({
-      x: Math.cos(angle) * radius,
-      z: Math.sin(angle) * radius,
-      tilt: 0.18 + rand * 0.22,
-      scale: 0.26 + rand * 0.2,
-      azimuth: angle + 0.6,
-    });
-  }
-
-  return {
-    solar,
-    wind,
-    markers: DEFAULT_MARKERS,
-  };
-}
-
-function normalizePlacementPlan(raw: Partial<PlacementPlan>, fallback: PlacementPlan): PlacementPlan {
-  const solarRaw = Array.isArray(raw.solar) ? raw.solar : fallback.solar;
-  const windRaw = Array.isArray(raw.wind) ? raw.wind : fallback.wind;
-  const markerRaw = Array.isArray(raw.markers) ? raw.markers : fallback.markers;
-
-  const solar = Array.from({ length: 12 }).map((_, i) => {
-    const fallbackItem = fallback.solar[i % fallback.solar.length];
-    const item = solarRaw[i] ?? fallbackItem;
-    return {
-      x: clampNumber(toFiniteNumber(item?.x, fallbackItem.x), -1, 1),
-      z: clampNumber(toFiniteNumber(item?.z, fallbackItem.z), -1, 1),
-      tilt: clampNumber(toFiniteNumber(item?.tilt, fallbackItem.tilt ?? 0.25), 0.1, 0.5),
-      scale: clampNumber(toFiniteNumber(item?.scale, fallbackItem.scale ?? 0.32), 0.22, 0.5),
-      azimuth: toFiniteNumber(item?.azimuth, fallbackItem.azimuth ?? 0),
-    };
-  });
-
-  const wind = Array.from({ length: 3 }).map((_, i) => {
-    const fallbackItem = fallback.wind[i % fallback.wind.length];
-    const item = windRaw[i] ?? fallbackItem;
-    return {
-      x: clampNumber(toFiniteNumber(item?.x, fallbackItem.x), -1, 1),
-      z: clampNumber(toFiniteNumber(item?.z, fallbackItem.z), -1, 1),
-      height: clampNumber(toFiniteNumber(item?.height, fallbackItem.height ?? 1.4), 1.1, 1.8),
-      scale: clampNumber(toFiniteNumber(item?.scale, fallbackItem.scale ?? 0.38), 0.3, 0.5),
-    };
-  });
-
-  const fallbackMarkersByType = new Map(fallback.markers.map((marker) => [marker.type, marker]));
-  const markers = DEFAULT_MARKERS.map((template) => {
-    const match = markerRaw.find((marker) => marker?.type === template.type) ??
-      fallbackMarkersByType.get(template.type) ?? template;
-
-    return {
-      type: template.type,
-      label: template.label,
-      x: clampNumber(toFiniteNumber(match?.x, template.x), -1, 1),
-      z: clampNumber(toFiniteNumber(match?.z, template.z), -1, 1),
-    };
-  });
-
-  return { solar, wind, markers };
-}
 
 function TerrainMesh({
   phase,
@@ -1000,89 +1106,6 @@ function TerrainMesh({
     >
       <primitive object={shaderMaterial} ref={materialRef} attach="material" />
     </mesh>
-  );
-}
-
-// Energy flow particles that appear progressively
-function EnergyParticles({ progress, phase }: { progress: number; phase: AnalysisPhase }) {
-  const pointsRef = useRef<THREE.Points>(null);
-  const phaseNum = ['data-collection', 'constraint-integration', 'technology-optimization', 'system-design', 'financial-modeling', 'complete'].indexOf(phase);
-
-  const particleCount = 300;
-
-  const [positions, colors, velocities] = useMemo(() => {
-    const pos = new Float32Array(particleCount * 3);
-    const col = new Float32Array(particleCount * 3);
-    const vel = new Float32Array(particleCount * 3);
-
-    for (let i = 0; i < particleCount; i++) {
-      // Spiral distribution around terrain
-      const angle = (i / particleCount) * Math.PI * 8;
-      const radius = 2 + (i / particleCount) * 4;
-
-      pos[i * 3] = Math.cos(angle) * radius;
-      pos[i * 3 + 1] = -1 + Math.random() * 0.5;
-      pos[i * 3 + 2] = Math.sin(angle) * radius;
-
-      // Green to gold gradient
-      const t = i / particleCount;
-      col[i * 3] = 0.2 + t * 0.6;
-      col[i * 3 + 1] = 0.8 - t * 0.2;
-      col[i * 3 + 2] = 0.3 + t * 0.2;
-
-      vel[i * 3] = (Math.random() - 0.5) * 0.02;
-      vel[i * 3 + 1] = Math.random() * 0.03 + 0.01;
-      vel[i * 3 + 2] = (Math.random() - 0.5) * 0.02;
-    }
-
-    return [pos, col, vel];
-  }, []);
-
-  useFrame((state) => {
-    if (pointsRef.current && phaseNum >= 1) {
-      const pos = pointsRef.current.geometry.attributes.position.array as Float32Array;
-      const visibleCount = Math.floor(particleCount * Math.min(progress * 1.5, 1));
-
-      for (let i = 0; i < visibleCount; i++) {
-        pos[i * 3] += velocities[i * 3];
-        pos[i * 3 + 1] += velocities[i * 3 + 1];
-        pos[i * 3 + 2] += velocities[i * 3 + 2];
-
-        // Spiral upward motion
-        const angle = state.clock.elapsedTime * 0.5 + (i / particleCount) * Math.PI * 2;
-        pos[i * 3] += Math.cos(angle) * 0.002;
-        pos[i * 3 + 2] += Math.sin(angle) * 0.002;
-
-        if (pos[i * 3 + 1] > 5) {
-          pos[i * 3 + 1] = -1;
-          const resetAngle = (i / particleCount) * Math.PI * 8;
-          const resetRadius = 2 + (i / particleCount) * 4;
-          pos[i * 3] = Math.cos(resetAngle) * resetRadius;
-          pos[i * 3 + 2] = Math.sin(resetAngle) * resetRadius;
-        }
-      }
-
-      pointsRef.current.geometry.attributes.position.needsUpdate = true;
-    }
-  });
-
-  if (phaseNum < 1) return null;
-
-  return (
-    <points ref={pointsRef}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-        <bufferAttribute attach="attributes-color" args={[colors, 3]} />
-      </bufferGeometry>
-      <pointsMaterial
-        size={0.06}
-        vertexColors
-        transparent
-        opacity={0.7 * Math.min(progress * 2, 1)}
-        sizeAttenuation
-        blending={THREE.AdditiveBlending}
-      />
-    </points>
   );
 }
 
@@ -1330,124 +1353,6 @@ function WindTurbines({
 }
 
 // Floating analysis markers with better animations
-function AnalysisMarkers({
-  phase,
-  progress,
-  placements,
-  getSurfaceHeight,
-  polygonBounds,
-}: {
-  phase: AnalysisPhase;
-  progress: number;
-  placements: MarkerPlacement[];
-  getSurfaceHeight: (x: number, z: number) => number;
-  polygonBounds: PolygonBounds;
-}) {
-  const groupRef = useRef<THREE.Group>(null);
-  const phaseNum = ['data-collection', 'constraint-integration', 'technology-optimization', 'system-design', 'financial-modeling', 'complete'].indexOf(phase);
-
-  const markers = useMemo(() => {
-    return placements.map((placement, i) => {
-      const seed = Math.floor((placement.x * 900 + placement.z * 1100) * 1000) + i * 13;
-      const rand = mulberry32(seed);
-      const x = toPolygonCoord(placement.x, polygonBounds.minX, polygonBounds.maxX);
-      const z = toPolygonCoord(placement.z, polygonBounds.minZ, polygonBounds.maxZ);
-
-      // Check if position is inside the polygon (if polygon exists)
-      const isInside = !polygonBounds.normalizedPolygon ||
-        isPointInPolygon(x, z, polygonBounds.normalizedPolygon);
-
-      return {
-        x,
-        z,
-        label: placement.label,
-        type: placement.type,
-        stemHeight: 0.5 + rand() * 0.25,
-        floatPhase: rand() * Math.PI * 2,
-        showAtPhase: placement.type === 'grid' ? 4 : placement.type === 'optimal' || placement.type === 'battery' ? 3 : 2,
-        isInside,
-      };
-    }).filter(m => m.isInside);
-  }, [placements, polygonBounds]);
-
-  useFrame((state) => {
-    if (groupRef.current) {
-      groupRef.current.children.forEach((child, i) => {
-        if (markers[i]) {
-          const marker = markers[i];
-          const baseY = getSurfaceHeight(marker.x, marker.z);
-          child.position.y = baseY + marker.stemHeight + Math.sin(state.clock.elapsedTime * 2 + marker.floatPhase) * 0.08;
-        }
-      });
-    }
-  });
-
-  const getMarkerColor = (type: string) => {
-    switch (type) {
-      case 'solar': return '#f59e0b';
-      case 'wind': return '#3b82f6';
-      case 'optimal': return '#10b981';
-      case 'battery': return '#8b5cf6';
-      case 'grid': return '#ec4899';
-      default: return '#6b7280';
-    }
-  };
-
-  return (
-    <group ref={groupRef}>
-      {markers.map((marker, i) => {
-        const isVisible = phaseNum >= marker.showAtPhase;
-        const markerOpacity = isVisible ? Math.min((progress - marker.showAtPhase * 0.15) * 4, 1) : 0;
-
-        if (markerOpacity <= 0) return null;
-
-        return (
-          <Float key={i} speed={2} rotationIntensity={0.1} floatIntensity={0.2}>
-            <group position={[marker.x, getSurfaceHeight(marker.x, marker.z) + marker.stemHeight, marker.z]}>
-              {/* Glowing orb */}
-              <mesh>
-                <sphereGeometry args={[0.1, 24, 24]} />
-                <meshStandardMaterial
-                  color={getMarkerColor(marker.type)}
-                  emissive={getMarkerColor(marker.type)}
-                  emissiveIntensity={0.8}
-                  transparent
-                  opacity={markerOpacity}
-                />
-              </mesh>
-              {/* Outer ring */}
-              <mesh rotation={[-Math.PI / 2, 0, 0]}>
-                <ringGeometry args={[0.15, 0.22, 32]} />
-                <meshBasicMaterial
-                  color={getMarkerColor(marker.type)}
-                  transparent
-                  opacity={markerOpacity * 0.5}
-                  side={THREE.DoubleSide}
-                />
-              </mesh>
-              {/* Connection line */}
-              <mesh position={[0, -marker.stemHeight / 2, 0]}>
-                <cylinderGeometry args={[0.008, 0.008, marker.stemHeight, 8]} />
-                <meshBasicMaterial
-                  color={getMarkerColor(marker.type)}
-                  transparent
-                  opacity={markerOpacity * 0.4}
-                />
-              </mesh>
-              {/* Point light for glow */}
-              <pointLight
-                color={getMarkerColor(marker.type)}
-                intensity={markerOpacity * 0.5}
-                distance={2}
-              />
-            </group>
-          </Float>
-        );
-      })}
-    </group>
-  );
-}
-
 // Beautiful animated grid floor
 function GridFloor({ revealProgress }: { revealProgress: number }) {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
@@ -1565,8 +1470,11 @@ export function TerrainAnalysisScene({
   const [isEntering, setIsEntering] = useState(true);
   const [revealProgress, setRevealProgress] = useState(0);
   const [realElevationData, setRealElevationData] = useState<Float32Array | null>(null);
-  const fallbackPlan = useMemo(() => buildFallbackPlan(), []);
-  const [placementPlan, setPlacementPlan] = useState<PlacementPlan>(fallbackPlan);
+  const [elevationBounds, setElevationBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(null);
+  const [elevationGridWidth, setElevationGridWidth] = useState<number | null>(null);
+  const [elevationGridHeight, setElevationGridHeight] = useState<number | null>(null);
+  const [placementPlan, setPlacementPlan] = useState<PlacementPlan | null>(null);
+  const draftConstraints = usePlanStore((state) => state.draftConstraints);
   const terrainData = useMemo(
     () => buildTerrainHeightmap(realElevationData, TERRAIN_RESOLUTION),
     [realElevationData]
@@ -1592,14 +1500,14 @@ export function TerrainAnalysisScene({
     setMounted(true);
   }, []);
 
-  // Fetch real elevation data when polygon changes
   useEffect(() => {
     if (polygon && polygon.length >= 3) {
-      const center = calculateCentroid(polygon);
-      // Fetch a grid around the center, covering ~500m radius
-      fetchElevationGrid(center, 500, 10)
-        .then(data => {
+      fetchElevationGrid(polygon)
+        .then(({ data, gridWidth, gridHeight, bounds }) => {
           setRealElevationData(data);
+          setElevationBounds(bounds);
+          setElevationGridWidth(gridWidth);
+          setElevationGridHeight(gridHeight);
         })
         .catch(err => {
           console.error("Failed to load elevation data", err);
@@ -1608,43 +1516,132 @@ export function TerrainAnalysisScene({
   }, [polygon]);
 
   useEffect(() => {
+    if (!draftConstraints?.budget || !draftConstraints?.energy || !draftConstraints?.technical) {
+      return;
+    }
+    
     let cancelled = false;
     const controller = new AbortController();
-    const gridSize = 10;
-    const grid = realElevationData
+    
+    const hasRealData = realElevationData && elevationBounds && elevationGridWidth && elevationGridHeight;
+    const gridWidth = hasRealData ? elevationGridWidth : 10;
+    const gridHeight = hasRealData ? elevationGridHeight : 10;
+    const elevationGrid = hasRealData
       ? Array.from(realElevationData)
-      : downsampleTerrainData(terrainData, TERRAIN_RESOLUTION, gridSize);
+      : downsampleTerrainData(terrainData, TERRAIN_RESOLUTION, gridWidth);
+    
+    const bounds = hasRealData
+      ? elevationBounds
+      : calculateBounds(polygon?.map(p => ({ lat: p.lat, lng: p.lng })) ?? []);
+    
+    if (!bounds) {
+      console.warn('Cannot calculate placements: missing bounds');
+      return;
+    }
+    
+    const latRange = bounds.north - bounds.south;
+    const cellSizeMeters = (latRange * 111320) / gridHeight;
+    
+    const elevationFloat32 = new Float32Array(elevationGrid);
+    const slopeGrid = calculateSlope(elevationFloat32, gridWidth, gridHeight, cellSizeMeters);
+    const aspectGrid = calculateAspect(elevationFloat32, gridWidth, gridHeight);
+    const solarSuitability = calculateSolarSuitability(elevationFloat32, slopeGrid, aspectGrid, gridWidth, gridHeight);
+    const windSuitability = calculateWindSuitability(elevationFloat32, slopeGrid, gridWidth, gridHeight);
 
-    const requestPlan = async () => {
+    const streamPlacements = async () => {
+      console.log('[Placements] Starting fetch...');
       try {
         const res = await fetch('/api/terrain/placements', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ elevationGrid: grid, gridSize }),
+          body: JSON.stringify({
+            elevationGrid,
+            gridWidth,
+            gridHeight,
+            slopeGrid: Array.from(slopeGrid),
+            aspectGrid: Array.from(aspectGrid),
+            solarSuitability: Array.from(solarSuitability),
+            windSuitability: Array.from(windSuitability),
+            constraints: draftConstraints,
+            bounds,
+          }),
           signal: controller.signal,
         });
 
+        console.log('[Placements] Response status:', res.status);
         if (!res.ok) throw new Error('Placement plan request failed');
+        if (!res.body) throw new Error('No response body');
 
-        const payload = await res.json();
-        if (!payload?.success || !payload?.data) {
-          throw new Error('Placement plan missing');
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulated = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (cancelled) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          accumulated += chunk;
+          console.log('[Placements] Chunk received:', chunk.length, 'chars');
+
+          try {
+            const jsonStart = accumulated.indexOf('{');
+            if (jsonStart === -1) continue;
+
+            const jsonPart = accumulated.slice(jsonStart);
+            const parsed = parsePartialJson(jsonPart) as Partial<PlacementPlan>;
+
+            if (parsed?.zones?.length) {
+              const validatedZones = parsed.zones.filter(z => validateZone(z, polygonBounds));
+              console.log('[Placements] Validated zones:', validatedZones.length);
+              const generated = generatePlacementsFromZones(validatedZones);
+              console.log('[Placements] Generated:', generated.solar.length, 'solar,', generated.wind.length, 'wind');
+              setPlacementPlan({
+                solar: generated.solar,
+                wind: generated.wind,
+                zones: validatedZones,
+              });
+            }
+          } catch {
+            // partial-json couldn't parse yet
+          }
         }
 
-        const normalized = normalizePlacementPlan(payload.data, fallbackPlan);
-        if (!cancelled) setPlacementPlan(normalized);
+        console.log('[Placements] Stream complete. Total:', accumulated.length, 'chars');
+        if (!cancelled) {
+          try {
+            const jsonStart = accumulated.indexOf('{');
+            const jsonEnd = accumulated.lastIndexOf('}');
+            if (jsonStart !== -1 && jsonEnd > jsonStart) {
+              const finalJson = JSON.parse(accumulated.slice(jsonStart, jsonEnd + 1)) as PlacementPlan;
+              const validatedZones = (finalJson.zones ?? []).filter(z => validateZone(z, polygonBounds));
+              const generated = generatePlacementsFromZones(validatedZones);
+              console.log('[Placements] Final:', generated.solar.length, 'solar,', generated.wind.length, 'wind');
+              setPlacementPlan({
+                solar: generated.solar,
+                wind: generated.wind,
+                zones: validatedZones,
+              });
+            }
+          } catch (parseError) {
+            console.error('[Placements] Failed to parse final JSON:', parseError);
+          }
+        }
       } catch (error) {
-        if (!cancelled) setPlacementPlan(fallbackPlan);
+        if (!cancelled) {
+          console.error('[Placements] Error:', error);
+        }
       }
     };
 
-    requestPlan();
+    streamPlacements();
 
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [realElevationData, terrainData, fallbackPlan]);
+  }, [realElevationData, terrainData, elevationBounds, elevationGridWidth, elevationGridHeight, draftConstraints, polygon]);
 
   // Progressive reveal animation
   useEffect(() => {
@@ -1724,40 +1721,32 @@ export function TerrainAnalysisScene({
               resolution={TERRAIN_RESOLUTION}
               revealProgress={revealProgress}
             />
-            {/* Progressive elements */}
-            <EnergyParticles progress={progress} phase={phase} />
-            <SolarStructures
-              phase={phase}
-              progress={progress}
-              placements={placementPlan.solar}
-              getSurfaceHeight={getSurfaceHeight}
-              polygonBounds={polygonBounds}
-            />
-            <WindTurbines
-              phase={phase}
-              progress={progress}
-              placements={placementPlan.wind}
-              getSurfaceHeight={getSurfaceHeight}
-              polygonBounds={polygonBounds}
-            />
-            <AnalysisMarkers
-              phase={phase}
-              progress={progress}
-              placements={placementPlan.markers}
-              getSurfaceHeight={getSurfaceHeight}
-              polygonBounds={polygonBounds}
-            />
+            {placementPlan && (
+              <>
+                {placementPlan.zones && (
+                  <ZoneOverlays
+                    zones={placementPlan.zones}
+                    getSurfaceHeight={getSurfaceHeight}
+                    polygonBounds={polygonBounds}
+                  />
+                )}
+                <SolarStructures
+                  phase={phase}
+                  progress={progress}
+                  placements={placementPlan.solar}
+                  getSurfaceHeight={getSurfaceHeight}
+                  polygonBounds={polygonBounds}
+                />
+                <WindTurbines
+                  phase={phase}
+                  progress={progress}
+                  placements={placementPlan.wind}
+                  getSurfaceHeight={getSurfaceHeight}
+                  polygonBounds={polygonBounds}
+                />
+              </>
+            )}
             <GridFloor revealProgress={revealProgress} />
-
-            {/* Ambient sparkles */}
-            <Sparkles
-              count={80}
-              size={2.5}
-              speed={0.35}
-              opacity={0.45 * revealProgress}
-              scale={14}
-              color="#34d399"
-            />
 
             <OrbitControls
               enableZoom={true}
