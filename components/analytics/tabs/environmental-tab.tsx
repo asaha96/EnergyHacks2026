@@ -3,10 +3,10 @@
 import * as React from 'react';
 import { useMemo, useRef, useEffect } from 'react';
 import { motion, useSpring, useTransform, useInView } from 'framer-motion';
-import { 
-  TreePine, 
-  Car, 
-  Home, 
+import {
+  TreePine,
+  Car,
+  Home,
   Leaf,
   Droplets,
   Globe,
@@ -26,14 +26,14 @@ const itemVariants = {
   visible: { opacity: 1, y: 0 },
 };
 
-function AnimatedCounter({ 
-  value, 
+function AnimatedCounter({
+  value,
   decimals = 0,
   suffix = '',
   prefix = '',
   className,
-}: { 
-  value: number; 
+}: {
+  value: number;
   decimals?: number;
   suffix?: string;
   prefix?: string;
@@ -43,8 +43,8 @@ function AnimatedCounter({
   const isInView = useInView(ref, { once: true, margin: '-50px' });
   const spring = useSpring(0, { mass: 0.8, stiffness: 75, damping: 15 });
   const display = useTransform(spring, (current) => {
-    const formatted = decimals > 0 
-      ? current.toFixed(decimals) 
+    const formatted = decimals > 0
+      ? current.toFixed(decimals)
       : Math.round(current).toLocaleString();
     return `${prefix}${formatted}${suffix}`;
   });
@@ -87,18 +87,18 @@ function HeroStat({ label, value, decimals = 0, suffix, subtext, gradient, icon 
           <rect width="100" height="100" fill="url(#leaf-pattern)" />
         </svg>
       </div>
-      
+
       <div className="absolute right-4 top-4 opacity-20">
         {icon}
       </div>
-      
+
       <div className="relative">
         <p className="text-xs font-semibold uppercase tracking-wider text-white/80">
           {label}
         </p>
         <div className="mt-2 flex items-baseline gap-1.5">
-          <AnimatedCounter 
-            value={value} 
+          <AnimatedCounter
+            value={value}
             decimals={decimals}
             suffix={suffix}
             className="text-4xl font-bold tracking-tight text-white tabular-nums"
@@ -138,8 +138,8 @@ function EquivalencyCard({ icon, value, unit, description, color, bgColor, delay
         </div>
         <div className="flex-1">
           <div className="flex items-baseline gap-1.5">
-            <AnimatedCounter 
-              value={value} 
+            <AnimatedCounter
+              value={value}
               className="text-2xl font-bold text-foreground tabular-nums"
             />
             <span className="text-lg font-medium text-muted-foreground">{unit}</span>
@@ -147,7 +147,7 @@ function EquivalencyCard({ icon, value, unit, description, color, bgColor, delay
           <p className="mt-0.5 text-sm text-muted-foreground leading-tight">{description}</p>
         </div>
       </div>
-      
+
       <div className={cn(
         'absolute -right-4 -top-4 h-24 w-24 rounded-full opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-20',
         bgColor
@@ -159,34 +159,16 @@ function EquivalencyCard({ icon, value, unit, description, color, bgColor, delay
 export function EnvironmentalTab({ plan, className }: EnvironmentalTabProps) {
   const planAnalysis = plan?.analysis;
   const metrics = useMemo(() => {
-    if (!planAnalysis) {
-      return {
-        annualCO2: 0,
-        lifetimeCO2: 0,
-        treesEquivalent: 0,
-        carsOffRoad: 0,
-        homesPowered: 0,
-        gallonsGas: 0,
-      };
-    }
-
-    const { co2OffsetTons, annualProductionKwh } = planAnalysis;
-    const lifetimeCO2 = co2OffsetTons * 25;
-    // EPA conversion factors
-    const treesEquivalent = Math.round(co2OffsetTons * 16.5); // Urban trees absorbing CO2 for 10 years
-    const carsOffRoad = Math.round(co2OffsetTons / 4.6); // Average car emits 4.6 metric tons/year
-    const homesPowered = Math.round(annualProductionKwh / 10500); // Average US home uses 10,500 kWh/year
-    const gallonsGas = Math.round(co2OffsetTons * 113); // 1 ton CO2 = ~113 gallons of gasoline
-
+    // HARDCODED DEMO DATA
     return {
-      annualCO2: co2OffsetTons,
-      lifetimeCO2,
-      treesEquivalent,
-      carsOffRoad,
-      homesPowered,
-      gallonsGas,
+      annualCO2: 3578,
+      lifetimeCO2: 89438,
+      treesEquivalent: 59029,
+      carsOffRoad: 778,
+      homesPowered: 918,
+      gallonsGas: 404259,
     };
-  }, [planAnalysis]);
+  }, []);
 
   return (
     <motion.div
@@ -277,7 +259,7 @@ export function EnvironmentalTab({ plan, className }: EnvironmentalTabProps) {
       >
         <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-emerald-200/50 dark:bg-emerald-500/10 blur-2xl" />
         <div className="absolute -left-4 -bottom-4 h-20 w-20 rounded-full bg-teal-200/50 dark:bg-teal-500/10 blur-2xl" />
-        
+
         <div className="relative flex items-start gap-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/20">
             <Globe className="h-6 w-6 text-white" />
@@ -287,8 +269,8 @@ export function EnvironmentalTab({ plan, className }: EnvironmentalTabProps) {
               Your Contribution Matters
             </h4>
             <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-              By generating clean energy on your property, you&apos;re directly contributing 
-              to reducing greenhouse gas emissions and building a more sustainable future 
+              By generating clean energy on your property, you&apos;re directly contributing
+              to reducing greenhouse gas emissions and building a more sustainable future
               for your community and future generations.
             </p>
             <div className="mt-3 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">

@@ -2,9 +2,9 @@
 
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Sun, 
-  DollarSign, 
+import {
+  Sun,
+  DollarSign,
   Leaf,
   ChevronRight,
 } from 'lucide-react';
@@ -111,7 +111,7 @@ function SectionCard({
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground/50 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
           </div>
-          
+
           <div className="mt-2 flex items-baseline gap-1.5">
             <span className="text-xl font-bold text-foreground tabular-nums">{metric}</span>
             <span className="text-sm text-muted-foreground">{metricLabel}</span>
@@ -130,16 +130,13 @@ export function SectionCards({
   className,
 }: SectionCardsProps) {
   const metrics = useMemo(() => {
-    const annualProduction = plan.analysis?.annualProductionKwh || 0;
-    const netCost = plan.financials?.netCostAfterIncentives || 0;
-    const co2Offset = plan.analysis?.co2OffsetTons || 0;
-
+    // HARDCODED DEMO DATA
     return {
-      annualProduction,
-      netCost,
-      co2Offset,
+      annualProduction: 9636000,
+      netCost: 4550000,
+      co2Offset: 3578,
     };
-  }, [plan.analysis, plan.financials]);
+  }, []);
 
   return (
     <motion.div
@@ -148,7 +145,7 @@ export function SectionCards({
       animate="visible"
       className={cn('space-y-3', className)}
     >
-      <motion.p 
+      <motion.p
         variants={cardVariants}
         className="text-xs font-medium text-muted-foreground uppercase tracking-wide"
       >

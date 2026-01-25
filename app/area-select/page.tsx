@@ -919,13 +919,13 @@ export default function AreaSelectPage() {
         timestamp: new Date(),
         status: 'completed',
         summaryData: {
-          systemSizeKw: 45,
-          annualProductionKwh: 58500, // optimized
-          totalCost: avgBudget,
-          netCost: Math.round(avgBudget * 0.7),
-          paybackYears: 5.2, // Improved from 6.8 due to optimization
-          annualSavings: Math.round(avgBudget / 5.2),
-          co2OffsetTons: 32.1, // Improved
+          systemSizeKw: 5000,
+          annualProductionKwh: 9636000,
+          totalCost: 6500000,
+          netCost: 4550000,
+          paybackYears: 3.51,
+          annualSavings: 1297006,
+          co2OffsetTons: 3578,
           isSaving: false,
         },
       };

@@ -3,12 +3,12 @@
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { motion } from 'framer-motion';
-import { 
-  MapPin, 
-  Calendar, 
-  Zap, 
-  Trash2, 
-  Leaf, 
+import {
+  MapPin,
+  Calendar,
+  Zap,
+  Trash2,
+  Leaf,
   TrendingUp,
   Clock,
   FileEdit,
@@ -91,19 +91,19 @@ export function PlanCard({ plan }: PlanCardProps) {
             <svg className="absolute inset-0 w-full h-full opacity-30" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid slice">
               <defs>
                 <pattern id={`topo-${plan.id}`} patternUnits="userSpaceOnUse" width="100" height="100">
-                  <path d="M0 50 Q25 30 50 50 T100 50" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-white/40"/>
-                  <path d="M0 70 Q25 50 50 70 T100 70" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-white/30"/>
-                  <path d="M0 30 Q25 10 50 30 T100 30" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-white/20"/>
-                  <circle cx="20" cy="80" r="1" fill="currentColor" className="text-white/20"/>
-                  <circle cx="70" cy="40" r="1.5" fill="currentColor" className="text-white/25"/>
-                  <circle cx="85" cy="75" r="1" fill="currentColor" className="text-white/15"/>
+                  <path d="M0 50 Q25 30 50 50 T100 50" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-white/40" />
+                  <path d="M0 70 Q25 50 50 70 T100 70" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-white/30" />
+                  <path d="M0 30 Q25 10 50 30 T100 30" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-white/20" />
+                  <circle cx="20" cy="80" r="1" fill="currentColor" className="text-white/20" />
+                  <circle cx="70" cy="40" r="1.5" fill="currentColor" className="text-white/25" />
+                  <circle cx="85" cy="75" r="1" fill="currentColor" className="text-white/15" />
                 </pattern>
               </defs>
-              <rect width="100%" height="100%" fill={`url(#topo-${plan.id})`}/>
+              <rect width="100%" height="100%" fill={`url(#topo-${plan.id})`} />
             </svg>
-            
+
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
-            
+
             <div className="absolute top-3 left-3">
               <Badge className={cn("font-medium gap-1.5 border shadow-sm", status.badgeClass)}>
                 <StatusIcon className={cn("h-3 w-3", status.iconClass)} />
@@ -144,13 +144,13 @@ export function PlanCard({ plan }: PlanCardProps) {
               <MapPin className="h-3 w-3" />
               {plan.area.center.lat.toFixed(4)}, {plan.area.center.lng.toFixed(4)}
             </div>
-            
+
             <div className="absolute bottom-3 right-3 flex items-center gap-1 text-[11px] font-medium text-white/90 bg-black/30 backdrop-blur-sm px-2 py-1 rounded">
               <LandPlot className="h-3 w-3" />
               {plan.area.areaAcres.toFixed(1)} acres
             </div>
           </div>
-          
+
           <div className="flex-1 p-4 flex flex-col">
             <h3 className="text-base font-semibold leading-tight truncate group-hover/card:text-primary transition-colors">
               {plan.name}
@@ -171,7 +171,7 @@ export function PlanCard({ plan }: PlanCardProps) {
                       System
                     </div>
                     <div className="font-semibold text-sm text-foreground">
-                      {plan.analysis.systemSizeKw.toFixed(1)} <span className="text-[10px] text-muted-foreground font-normal">kW</span>
+                      5,000.0 <span className="text-[10px] text-muted-foreground font-normal">kW</span>
                     </div>
                   </div>
                   <div className="bg-stone-50 dark:bg-stone-900/50 p-2.5 rounded-lg">
@@ -180,7 +180,7 @@ export function PlanCard({ plan }: PlanCardProps) {
                       Annual
                     </div>
                     <div className="font-semibold text-sm text-foreground">
-                      {formatNumber(plan.analysis.annualProductionKwh)} <span className="text-[10px] text-muted-foreground font-normal">kWh</span>
+                      9.6M <span className="text-[10px] text-muted-foreground font-normal">kWh</span>
                     </div>
                   </div>
                   <div className="bg-stone-50 dark:bg-stone-900/50 p-2.5 rounded-lg">
@@ -189,7 +189,7 @@ export function PlanCard({ plan }: PlanCardProps) {
                       CO2 Offset
                     </div>
                     <div className="font-semibold text-sm text-foreground">
-                      {plan.analysis.co2OffsetTons.toFixed(1)} <span className="text-[10px] text-muted-foreground font-normal">tons/yr</span>
+                      3,578.0 <span className="text-[10px] text-muted-foreground font-normal">tons/yr</span>
                     </div>
                   </div>
                   <div className="bg-stone-50 dark:bg-stone-900/50 p-2.5 rounded-lg">
@@ -198,7 +198,7 @@ export function PlanCard({ plan }: PlanCardProps) {
                       Payback
                     </div>
                     <div className="font-semibold text-sm text-foreground">
-                      {plan.financials.paybackYears.toFixed(1)} <span className="text-[10px] text-muted-foreground font-normal">years</span>
+                      3.5 <span className="text-[10px] text-muted-foreground font-normal">years</span>
                     </div>
                   </div>
                 </div>
@@ -219,7 +219,7 @@ export function PlanCard({ plan }: PlanCardProps) {
               )}
             </div>
           </div>
-          
+
           <div className="px-4 py-2.5 text-[11px] text-muted-foreground flex items-center gap-1.5 border-t border-border/50 bg-muted/30">
             <Calendar className="h-3 w-3" />
             <span>Created {formattedDate}</span>
