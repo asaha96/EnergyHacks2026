@@ -67,7 +67,7 @@ export function MapTo3DTransition({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden"
+          className="fixed top-0 left-0 bottom-0 right-[420px] z-50 flex items-center justify-center overflow-hidden"
         >
           {/* Animated background gradient */}
           <motion.div
@@ -186,7 +186,7 @@ export function MapTo3DTransition({
                   transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
                   className="absolute inset-2 rounded-full border border-dashed border-primary/30"
                 />
-                
+
                 {phase === 'zoom' && <Satellite className="w-10 h-10 text-primary" />}
                 {phase === 'process' && (
                   <motion.div
@@ -253,11 +253,10 @@ export function MapTo3DTransition({
               {['zoom', 'process', 'reveal'].map((p, i) => (
                 <motion.div
                   key={p}
-                  className={`w-2 h-2 rounded-full ${
-                    ['zoom', 'process', 'reveal'].indexOf(phase) >= i
+                  className={`w-2 h-2 rounded-full ${['zoom', 'process', 'reveal'].indexOf(phase) >= i
                       ? 'bg-primary'
                       : 'bg-muted'
-                  }`}
+                    }`}
                   animate={{
                     scale: phase === p ? [1, 1.3, 1] : 1,
                   }}
