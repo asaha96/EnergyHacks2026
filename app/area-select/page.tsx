@@ -1161,7 +1161,9 @@ export default function AreaSelectPage() {
         phase={currentPhase}
         progress={analysisProgress}
         isVisible={show3DView}
+        polygon={prospectedArea}
       />
+
 
       {show3DView && (
         <AnalysisOverlay

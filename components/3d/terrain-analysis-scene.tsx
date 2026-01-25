@@ -11,6 +11,8 @@ import {
 import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { AnalysisPhase } from '@/components/agent';
+import { PolygonCoordinates } from '@/components/map';
+import { calculateCentroid, fetchElevationGrid } from '@/lib/geo';
 
 // Generate realistic terrain heightmap using multiple noise octaves
 function generateTerrainData(width: number, height: number, seed: number = 42) {
@@ -48,8 +50,8 @@ function generateTerrainData(width: number, height: number, seed: number = 42) {
 
       const cx = x - width / 2;
       const cy = y - height / 2;
-      const distFromCenter = Math.sqrt(cx * cx + cy * cy) / (width / 2);
-      elevation += Math.max(0, 1 - distFromCenter * 1.2) * 0.5;
+      // const distFromCenter = Math.sqrt(cx * cx + cy * cy) / (width / 2);
+      // elevation += Math.max(0, 1 - distFromCenter * 1.2) * 0.5;
       elevation += Math.sin(x * 0.05) * Math.cos(y * 0.07) * 0.3;
 
       data[y * width + x] = elevation;
@@ -59,21 +61,105 @@ function generateTerrainData(width: number, height: number, seed: number = 42) {
   return data;
 }
 
+// Cubic interpolation for smoother upscaling
+function cubicInterpolate(p0: number, p1: number, p2: number, p3: number, t: number) {
+  const v0 = p2 - p0;
+  const v1 = 2 * p0 - 5 * p1 + 4 * p2 - p3;
+  const v2 = -p0 + 3 * p1 - 3 * p2 + p3;
+  return p1 + 0.5 * t * (v0 + t * (v1 + t * v2));
+}
+
+// Bicubic interpolation for 2D grid
+function bicubicInterpolate(grid: Float32Array, gridSize: number, x: number, y: number) {
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  const dx = x - xi;
+  const dy = y - yi;
+
+  const p = [];
+  for (let j = -1; j <= 2; j++) {
+    const row = [];
+    for (let i = -1; i <= 2; i++) {
+      let gx = xi + i;
+      let gy = yi + j;
+      // Clamp to edges
+      if (gx < 0) gx = 0;
+      if (gx >= gridSize) gx = gridSize - 1;
+      if (gy < 0) gy = 0;
+      if (gy >= gridSize) gy = gridSize - 1;
+      row.push(grid[gy * gridSize + gx]);
+    }
+    p.push(row);
+  }
+
+  const colResults = [];
+  for (let i = 0; i < 4; i++) {
+    colResults.push(cubicInterpolate(p[i][0], p[i][1], p[i][2], p[i][3], dx));
+  }
+
+  return cubicInterpolate(colResults[0], colResults[1], colResults[2], colResults[3], dy);
+}
+
 // Enhanced terrain mesh with progressive detail and lush green colors
 function TerrainMesh({
   phase,
   progress,
-  revealProgress
+  revealProgress,
+  realElevationData
 }: {
   phase: AnalysisPhase;
   progress: number;
   revealProgress: number;
+  realElevationData: Float32Array | null;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.ShaderMaterial>(null);
 
   const resolution = 128;
-  const terrainData = useMemo(() => generateTerrainData(resolution, resolution), []);
+  
+  const terrainData = useMemo(() => {
+    if (realElevationData && realElevationData.length === 100) { // 10x10 grid
+      const data = new Float32Array(resolution * resolution);
+      const gridSize = 10;
+      
+      // Calculate min/max for normalization
+      let minElev = Infinity;
+      let maxElev = -Infinity;
+      for (let i = 0; i < realElevationData.length; i++) {
+        minElev = Math.min(minElev, realElevationData[i]);
+        maxElev = Math.max(maxElev, realElevationData[i]);
+      }
+      
+      const range = maxElev - minElev || 1;
+      
+      // Generate noise for texture detail
+      const noiseData = generateTerrainData(resolution, resolution, 123);
+
+      for (let y = 0; y < resolution; y++) {
+        for (let x = 0; x < resolution; x++) {
+          // Map resolution coords to 10x10 grid coords
+          const gx = (x / (resolution - 1)) * (gridSize - 1);
+          const gy = (y / (resolution - 1)) * (gridSize - 1); // Flip Y if needed, but usually matches
+          
+          let elev = bicubicInterpolate(realElevationData, gridSize, gx, gy);
+          
+          // Normalize to 0-1.5 range, but keep relative shape
+          elev = ((elev - minElev) / range) * 2.0;
+          
+          // Add some noise detail (reduced intensity)
+          elev += noiseData[y * resolution + x] * 0.15;
+          
+          // Apply gentle edge fade for floating terrain look, but don't force to zero
+          // We rely on shader alpha fade for the "floating" effect
+          
+          data[y * resolution + x] = elev;
+        }
+      }
+      return data;
+    } else {
+      return generateTerrainData(resolution, resolution);
+    }
+  }, [realElevationData]);
 
   const geometry = useMemo(() => {
     const geo = new THREE.PlaneGeometry(10, 10, resolution - 1, resolution - 1);
@@ -748,21 +834,39 @@ interface TerrainAnalysisSceneProps {
   progress: number;
   isVisible: boolean;
   onTransitionComplete?: () => void;
+  polygon?: PolygonCoordinates[] | null;
 }
 
 export function TerrainAnalysisScene({
   phase,
   progress,
   isVisible,
-  onTransitionComplete
+  onTransitionComplete,
+  polygon
 }: TerrainAnalysisSceneProps) {
   const [mounted, setMounted] = useState(false);
   const [isEntering, setIsEntering] = useState(true);
   const [revealProgress, setRevealProgress] = useState(0);
+  const [realElevationData, setRealElevationData] = useState<Float32Array | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+  
+  // Fetch real elevation data when polygon changes
+  useEffect(() => {
+    if (polygon && polygon.length >= 3) {
+      const center = calculateCentroid(polygon);
+      // Fetch a grid around the center, covering ~500m radius
+      fetchElevationGrid(center, 500, 10)
+        .then(data => {
+          setRealElevationData(data);
+        })
+        .catch(err => {
+          console.error("Failed to load elevation data", err);
+        });
+    }
+  }, [polygon]);
 
   // Progressive reveal animation
   useEffect(() => {
@@ -836,6 +940,7 @@ export function TerrainAnalysisScene({
               phase={phase}
               progress={progress}
               revealProgress={revealProgress}
+              realElevationData={realElevationData}
             />
 
             {/* Progressive elements */}
