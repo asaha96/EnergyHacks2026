@@ -746,12 +746,33 @@ export default function AreaSelectPage() {
     // PRIVACY-FIRST AI CHECK - REMOVED for Late Consent Flow
     // We now allow analysis to run freely. Consent is requested at Save.
 
-    // Close constraints sidebar and start the cinematic transition
+    // Ensure constraints are written to the store before analysis starts
+    // This is needed because TerrainAnalysisScene checks for these values
+    updateDraftConstraints({
+      budget: {
+        min: budget[0],
+        max: budget[1],
+        financing,
+        paybackPriority,
+      },
+      energy: {
+        primaryGoal,
+        targetProduction,
+        gridConnection,
+      },
+      technical: {
+        technologies,
+        aestheticConcern,
+        maintenanceCapacity,
+      },
+      timeline,
+    });
+
     setIsConstraintsSidebarOpen(false);
     setIsAgentSidebarOpen(true);
     setAnalysisProgress(0);
     setIsTransitioningTo3D(true);
-  }, [validation.canProceed]);
+  }, [validation.canProceed, updateDraftConstraints, budget, financing, paybackPriority, primaryGoal, targetProduction, gridConnection, technologies, aestheticConcern, maintenanceCapacity, timeline]);
 
   const handleTransitionComplete = useCallback(() => {
     setIsTransitioningTo3D(false);
