@@ -319,7 +319,7 @@ export function AgentMessage({ message, className }: AgentMessageProps) {
   useEffect(() => {
     if (!message.subMessages || status !== 'completed') return;
 
-    const timers: NodeJS.Timeout[] = [];
+    const timers: ReturnType<typeof setTimeout>[] = [];
 
     message.subMessages.forEach((sub, index) => {
       const timer = setTimeout(() => {
@@ -328,7 +328,7 @@ export function AgentMessage({ message, className }: AgentMessageProps) {
       timers.push(timer);
     });
 
-    return () => timers.forEach(clearTimeout);
+    return () => timers.forEach(t => clearTimeout(t));
   }, [message.subMessages, status]);
 
   return (
