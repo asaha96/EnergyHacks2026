@@ -1165,7 +1165,7 @@ export default function AreaSelectPage() {
       )}
 
       <AnimatePresence>
-        {!isProspecting && (
+        {!isProspecting && !show3DView && !isTransitioningTo3D && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
