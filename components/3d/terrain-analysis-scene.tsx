@@ -88,14 +88,9 @@ function generateTerrainData(width: number, height: number, seed: number = 42) {
 function TerrainMesh({
   phase,
   progress,
-<<<<<<< Updated upstream
-  revealProgress
-}: {
-=======
   revealProgress,
   heightmap
 }: { 
->>>>>>> Stashed changes
   phase: AnalysisPhase;
   progress: number;
   revealProgress: number;
@@ -103,12 +98,6 @@ function TerrainMesh({
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.ShaderMaterial>(null);
-<<<<<<< Updated upstream
-
-  const resolution = 128;
-  const terrainData = useMemo(() => generateTerrainData(resolution, resolution), []);
-
-=======
   
   const width = heightmap?.width ?? 128;
   const height = heightmap?.height ?? 128;
@@ -120,7 +109,6 @@ function TerrainMesh({
     return normalizeHeightmap(heightmap);
   }, [heightmap, width, height]);
   
->>>>>>> Stashed changes
   const geometry = useMemo(() => {
     const geo = new THREE.PlaneGeometry(10, 10, width - 1, height - 1);
     const positions = geo.attributes.position.array as Float32Array;

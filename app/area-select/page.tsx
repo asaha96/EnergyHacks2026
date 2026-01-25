@@ -474,11 +474,20 @@ export default function AreaSelectPage() {
   const generateTerrainFromGemini = useCallback(async (polygon: PolygonCoordinates[]) => {
     setTerrainHeightmap(null);
     const messageId = addAgentMessage('thinking', 'Sending map snapshot to Gemini 3...', { status: 'active' });
+    const requestId = globalThis.crypto?.randomUUID?.() ?? `terrain-${Date.now()}`;
+    const requestStartedAt = performance.now();
+    console.info(`[gemini-terrain:${requestId}] client request start`, {
+      polygonPoints: polygon.length,
+      locationName: locationName ?? null,
+    });
 
     try {
       const response = await fetch('/api/gemini/terrain', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-request-id': requestId,
+        },
         body: JSON.stringify({
           polygon,
           locationName,
@@ -486,14 +495,36 @@ export default function AreaSelectPage() {
       });
 
       if (!response.ok) {
+        const errorBody = await response.text();
+        console.error(`[gemini-terrain:${requestId}] client response failed`, {
+          status: response.status,
+          durationMs: Math.round(performance.now() - requestStartedAt),
+          body: errorBody.slice(0, 800),
+        });
         throw new Error('Gemini terrain request failed');
       }
 
       const payload = await response.json();
       if (!payload?.heightmap?.data?.length) {
+        console.error(`[gemini-terrain:${requestId}] client response missing heightmap`, {
+          durationMs: Math.round(performance.now() - requestStartedAt),
+          heightmap: payload?.heightmap
+            ? {
+                width: payload.heightmap.width,
+                height: payload.heightmap.height,
+                dataLength: payload.heightmap.data.length,
+              }
+            : null,
+        });
         throw new Error('Gemini returned no heightmap');
       }
 
+      console.info(`[gemini-terrain:${requestId}] client response ok`, {
+        durationMs: Math.round(performance.now() - requestStartedAt),
+        heightmap: `${payload.heightmap.width}x${payload.heightmap.height}`,
+        dataLength: payload.heightmap.data.length,
+        summary: payload.summary ?? null,
+      });
       setTerrainHeightmap(payload.heightmap as TerrainHeightmap);
       updateAgentMessage(messageId, {
         status: 'completed',
@@ -502,6 +533,9 @@ export default function AreaSelectPage() {
         detail: `${payload.heightmap.width}x${payload.heightmap.height} elevation grid`,
       });
     } catch (error) {
+      console.error(`[gemini-terrain:${requestId}] client error`, {
+        error: error instanceof Error ? error.message : error,
+      });
       setTerrainHeightmap(null);
       updateAgentMessage(messageId, {
         status: 'completed',
