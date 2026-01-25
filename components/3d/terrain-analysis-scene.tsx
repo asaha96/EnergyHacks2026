@@ -2,6 +2,7 @@
 
 import { useRef, useMemo, useEffect, useState, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { cn } from '@/lib/utils';
 import {
   OrbitControls,
   PerspectiveCamera,
@@ -1552,6 +1553,7 @@ interface TerrainAnalysisSceneProps {
   isVisible: boolean;
   onTransitionComplete?: () => void;
   polygon?: PolygonCoordinates[] | null;
+  className?: string;
 }
 
 export function TerrainAnalysisScene({
@@ -1559,7 +1561,8 @@ export function TerrainAnalysisScene({
   progress,
   isVisible,
   onTransitionComplete,
-  polygon
+  polygon,
+  className
 }: TerrainAnalysisSceneProps) {
   const [mounted, setMounted] = useState(false);
   const [isEntering, setIsEntering] = useState(true);
@@ -1686,7 +1689,10 @@ export function TerrainAnalysisScene({
             duration: 0.8,
             ease: [0.22, 1, 0.36, 1]
           }}
-          className="absolute top-0 bottom-0 left-0 right-[420px] z-0"
+          className={cn(
+            "absolute top-0 bottom-0 left-0 right-[420px] z-0",
+            className
+          )}
         >
           <Canvas
             gl={{
@@ -1725,7 +1731,7 @@ export function TerrainAnalysisScene({
               revealProgress={revealProgress}
             />
             {/* Progressive elements */}
-            <EnergyParticles progress={progress} phase={phase} />
+            {/* Progressive elements - Particles removed per user request */}
             <SolarStructures
               phase={phase}
               progress={progress}
@@ -1750,14 +1756,7 @@ export function TerrainAnalysisScene({
             <GridFloor revealProgress={revealProgress} />
 
             {/* Ambient sparkles */}
-            <Sparkles
-              count={80}
-              size={2.5}
-              speed={0.35}
-              opacity={0.45 * revealProgress}
-              scale={14}
-              color="#34d399"
-            />
+            {/* Ambient sparkles removed per user request */}
 
             <OrbitControls
               enableZoom={true}
