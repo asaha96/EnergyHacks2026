@@ -493,7 +493,7 @@ function TerrainCrossSection({
 
 
 
-type PlacementZone = {
+export type PlacementZone = {
   x1: number;
   z1: number;
   x2: number;
@@ -506,7 +506,7 @@ type PlacementZone = {
   notes?: string;
 };
 
-type PlacementPlan = {
+export type PlacementPlan = {
   zones: PlacementZone[];
 };
 
@@ -1221,6 +1221,16 @@ interface TerrainAnalysisSceneProps {
   onTransitionComplete?: () => void;
   polygon?: PolygonCoordinates[] | null;
   className?: string;
+  /** Optional external placement plan - if provided, skips API fetch */
+  externalPlacementPlan?: PlacementPlan | null;
+  /** Callback when a zone is clicked */
+  onZoneSelect?: (zone: PlacementZone | null) => void;
+  /** Currently selected zone ID from parent */
+  selectedZoneId?: string | null;
+  /** Skip the animated reveal and show terrain immediately */
+  skipRevealAnimation?: boolean;
+  /** Callback when placement plan is generated (for persisting to storage) */
+  onPlacementPlanGenerated?: (plan: PlacementPlan) => void;
 }
 
 export function TerrainAnalysisScene({
@@ -1229,7 +1239,12 @@ export function TerrainAnalysisScene({
   isVisible,
   onTransitionComplete,
   polygon,
-  className
+  className,
+  externalPlacementPlan,
+  onZoneSelect,
+  selectedZoneId: externalSelectedZoneId,
+  skipRevealAnimation = false,
+  onPlacementPlanGenerated,
 }: TerrainAnalysisSceneProps) {
   const [mounted, setMounted] = useState(false);
   const [isEntering, setIsEntering] = useState(true);
@@ -1239,8 +1254,20 @@ export function TerrainAnalysisScene({
   const [elevationGridWidth, setElevationGridWidth] = useState<number | null>(null);
   const [elevationGridHeight, setElevationGridHeight] = useState<number | null>(null);
   const [placementPlan, setPlacementPlan] = useState<PlacementPlan | null>(null);
-  const [selectedZone, setSelectedZone] = useState<PlacementZone | null>(null);
+  const [internalSelectedZone, setInternalSelectedZone] = useState<PlacementZone | null>(null);
   const draftConstraints = usePlanStore((state) => state.draftConstraints);
+  
+  const selectedZone = externalSelectedZoneId !== undefined 
+    ? (placementPlan?.zones.find(z => z.id === externalSelectedZoneId) ?? null)
+    : internalSelectedZone;
+  
+  const handleZoneSelect = useCallback((zone: PlacementZone | null) => {
+    if (onZoneSelect) {
+      onZoneSelect(zone);
+    } else {
+      setInternalSelectedZone(zone);
+    }
+  }, [onZoneSelect]);
   const terrainData = useMemo(
     () => buildTerrainHeightmap(realElevationData, TERRAIN_RESOLUTION, elevationGridWidth, elevationGridHeight),
     [realElevationData, elevationGridWidth, elevationGridHeight]
@@ -1282,6 +1309,11 @@ export function TerrainAnalysisScene({
   }, [polygon]);
 
   useEffect(() => {
+    if (externalPlacementPlan) {
+      setPlacementPlan(externalPlacementPlan);
+      return;
+    }
+    
     if (!draftConstraints?.budget || !draftConstraints?.energy || !draftConstraints?.technical) {
       return;
     }
@@ -1382,7 +1414,9 @@ export function TerrainAnalysisScene({
               }
 
               console.log('[Placements] Final zones:', validatedZones.length);
-              setPlacementPlan({ zones: validatedZones });
+              const finalPlan = { zones: validatedZones };
+              setPlacementPlan(finalPlan);
+              onPlacementPlanGenerated?.(finalPlan);
             }
           } catch (parseError) {
             console.error('[Placements] Failed to parse final JSON or no zones:', parseError);
@@ -1398,7 +1432,9 @@ export function TerrainAnalysisScene({
             { x1: -0.5, z1: 0.2, x2: 0.5, z2: 0.6, type: 'solar', suitability: 95 },
             { x1: 0.4, z1: -0.7, x2: 0.7, z2: -0.4, type: 'wind', suitability: 88 }
           ];
-          setPlacementPlan({ zones: fallbackZones });
+          const fallbackPlan = { zones: fallbackZones };
+          setPlacementPlan(fallbackPlan);
+          onPlacementPlanGenerated?.(fallbackPlan);
         }
       }
     };
@@ -1409,17 +1445,22 @@ export function TerrainAnalysisScene({
       cancelled = true;
       controller.abort();
     };
-  }, [realElevationData, terrainData, elevationBounds, elevationGridWidth, elevationGridHeight, draftConstraints, polygon]);
+  }, [realElevationData, terrainData, elevationBounds, elevationGridWidth, elevationGridHeight, draftConstraints, polygon, externalPlacementPlan, onPlacementPlanGenerated]);
 
-  // Progressive reveal animation
   useEffect(() => {
     if (isVisible) {
+      if (skipRevealAnimation) {
+        setRevealProgress(1);
+        setIsEntering(false);
+        onTransitionComplete?.();
+        return;
+      }
+      
       setIsEntering(true);
       setRevealProgress(0);
 
-      // Animate reveal progress
       const startTime = Date.now();
-      const duration = 3000; // 3 seconds for full reveal
+      const duration = 3000;
 
       const animate = () => {
         const elapsed = Date.now() - startTime;
@@ -1436,7 +1477,7 @@ export function TerrainAnalysisScene({
 
       requestAnimationFrame(animate);
     }
-  }, [isVisible, onTransitionComplete]);
+  }, [isVisible, onTransitionComplete, skipRevealAnimation]);
 
   if (!mounted) return null;
 
@@ -1497,7 +1538,7 @@ export function TerrainAnalysisScene({
                 zones={placementPlan.zones}
                 getSurfaceHeight={getSurfaceHeight}
                 polygonBounds={polygonBounds}
-                onZoneClick={setSelectedZone}
+                onZoneClick={handleZoneSelect}
                 selectedZoneId={selectedZone?.id}
               />
             )}
@@ -1538,7 +1579,7 @@ export function TerrainAnalysisScene({
                   </div>
                 </div>
                 <button
-                  onClick={() => setSelectedZone(null)}
+                  onClick={() => handleZoneSelect(null)}
                   className="text-gray-400 hover:text-gray-600 transition-colors"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
