@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -78,13 +79,28 @@ ${mapHint}
 }
 
 export async function POST(request: Request) {
+  const requestId = request.headers.get('x-request-id') ?? randomUUID();
+  const logPrefix = `[gemini-terrain:${requestId}]`;
+  const requestStartedAt = Date.now();
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
+    console.error(`${logPrefix} missing GEMINI_API_KEY`);
     return NextResponse.json({ error: 'Missing GEMINI_API_KEY' }, { status: 500 });
   }
 
-  const body = (await request.json()) as TerrainRequest;
+  let body: TerrainRequest;
+  try {
+    body = (await request.json()) as TerrainRequest;
+  } catch (error) {
+    console.error(`${logPrefix} invalid JSON body`, {
+      error: error instanceof Error ? error.message : error,
+    });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
   if (!body?.polygon || body.polygon.length < 3) {
+    console.warn(`${logPrefix} missing polygon`, {
+      polygonPoints: body?.polygon?.length ?? 0,
+    });
     return NextResponse.json({ error: 'Polygon is required' }, { status: 400 });
   }
 
@@ -109,6 +125,14 @@ export async function POST(request: Request) {
   };
 
   const zoom = estimateZoom(bounds);
+  console.info(`${logPrefix} request parsed`, {
+    model: GEMINI_MODEL,
+    polygonPoints: body.polygon.length,
+    locationName: body.locationName ?? null,
+    bounds,
+    center,
+    zoom,
+  });
   const mapUrls = [
     `https://staticmap.openstreetmap.de/staticmap.php?center=${center.lat},${center.lng}&zoom=${zoom}&size=${MAP_SIZE.width}x${MAP_SIZE.height}&maptype=mapnik`,
     `https://staticmap.openstreetmap.fr/staticmap.php?center=${center.lat},${center.lng}&zoom=${zoom}&size=${MAP_SIZE.width}x${MAP_SIZE.height}&maptype=mapnik`,
@@ -122,14 +146,27 @@ export async function POST(request: Request) {
     try {
       const mapResponse = await fetch(mapUrl);
       if (!mapResponse.ok) {
+        console.warn(`${logPrefix} map fetch failed`, {
+          mapUrl,
+          status: mapResponse.status,
+        });
         continue;
       }
 
       mapBuffer = Buffer.from(await mapResponse.arrayBuffer());
       mimeType = mapResponse.headers.get('content-type') ?? 'image/png';
       mapSource = mapUrl;
+      console.info(`${logPrefix} map fetch success`, {
+        mapUrl,
+        mimeType,
+        bytes: mapBuffer.byteLength,
+      });
       break;
     } catch (error) {
+      console.warn(`${logPrefix} map fetch error`, {
+        mapUrl,
+        error: error instanceof Error ? error.message : error,
+      });
       continue;
     }
   }
@@ -143,6 +180,13 @@ export async function POST(request: Request) {
     mapSource,
   });
 
+  console.info(`${logPrefix} Gemini request start`, {
+    model: GEMINI_MODEL,
+    promptChars: prompt.length,
+    mapIncluded: Boolean(mapBuffer),
+    mapSource,
+  });
+  const geminiStartedAt = Date.now();
   const geminiResponse = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
     {
@@ -171,13 +215,26 @@ export async function POST(request: Request) {
   );
 
   if (!geminiResponse.ok) {
+    const errorBody = await geminiResponse.text();
+    console.error(`${logPrefix} Gemini request failed`, {
+      status: geminiResponse.status,
+      durationMs: Date.now() - geminiStartedAt,
+      body: errorBody.slice(0, 800),
+    });
     return NextResponse.json({ error: 'Gemini request failed' }, { status: 502 });
   }
 
   const geminiPayload = await geminiResponse.json();
   const text = geminiPayload?.candidates?.[0]?.content?.parts?.[0]?.text;
+  console.info(`${logPrefix} Gemini response received`, {
+    status: geminiResponse.status,
+    durationMs: Date.now() - geminiStartedAt,
+    candidates: geminiPayload?.candidates?.length ?? 0,
+    textChars: typeof text === 'string' ? text.length : 0,
+  });
 
   if (!text) {
+    console.error(`${logPrefix} Gemini returned no content`);
     return NextResponse.json({ error: 'Gemini returned no content' }, { status: 502 });
   }
 
@@ -185,13 +242,35 @@ export async function POST(request: Request) {
   try {
     parsed = JSON.parse(text);
   } catch (error) {
+    console.error(`${logPrefix} Gemini JSON parse failed`, {
+      error: error instanceof Error ? error.message : error,
+      textPreview: text.slice(0, 800),
+    });
     return NextResponse.json({ error: 'Failed to parse Gemini response' }, { status: 502 });
   }
 
   if (!parsed?.heightmap?.data || parsed.heightmap.data.length === 0) {
+    console.error(`${logPrefix} Gemini response missing heightmap`, {
+      heightmap: parsed?.heightmap
+        ? {
+            width: parsed.heightmap.width,
+            height: parsed.heightmap.height,
+            dataLength: parsed.heightmap.data.length,
+          }
+        : null,
+    });
     return NextResponse.json({ error: 'Gemini response missing heightmap' }, { status: 502 });
   }
 
+  console.info(`${logPrefix} Gemini response parsed`, {
+    heightmap: {
+      width: parsed.heightmap.width,
+      height: parsed.heightmap.height,
+      dataLength: parsed.heightmap.data.length,
+    },
+    summary: parsed.summary ?? null,
+    totalDurationMs: Date.now() - requestStartedAt,
+  });
   return NextResponse.json({
     heightmap: parsed.heightmap,
     summary: parsed.summary ?? null,
