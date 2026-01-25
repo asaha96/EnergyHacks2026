@@ -96,11 +96,12 @@ export default function AreaSelectPage() {
     label: string;
   }>>([]);
   const [isSavingPlan, setIsSavingPlan] = useState(false);
-  const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
 
+  // -- 3D TERRAIN ANALYSIS STATE --
   const [show3DView, setShow3DView] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [isTransitioningTo3D, setIsTransitioningTo3D] = useState(false);
+  // -------------------------------
 
   const { draftConstraints, updateDraftConstraints, addPlan, setDraftArea } = usePlanStore();
 
@@ -745,11 +746,11 @@ export default function AreaSelectPage() {
     // PRIVACY-FIRST AI CHECK - REMOVED for Late Consent Flow
     // We now allow analysis to run freely. Consent is requested at Save.
 
+    // Close constraints sidebar and start the cinematic transition
     setIsConstraintsSidebarOpen(false);
     setIsAgentSidebarOpen(true);
     setAnalysisProgress(0);
     setIsTransitioningTo3D(true);
-    setPendingPlanId(`plan-${Date.now()}`);
   }, [validation.canProceed]);
 
   const handleTransitionComplete = useCallback(() => {
@@ -800,18 +801,10 @@ export default function AreaSelectPage() {
     };
   }, [budget]);
 
-const handlePlacementPlanGenerated = useCallback((plan: { zones: Array<{ x1: number; z1: number; x2: number; z2: number; suitability: number; type: string; id?: string; name?: string; estimatedCapacityMW?: number; notes?: string }> }) => {
-    if (pendingPlanId) {
-      try {
-        localStorage.setItem(`placement-plan-${pendingPlanId}`, JSON.stringify(plan));
-      } catch (e) {
-        console.warn('Failed to store placement plan:', e);
-      }
-    }
-  }, [pendingPlanId]);
-
   const handleSavePlan = useCallback(async () => {
-    if (!prospectedArea || !pendingPlanId) return;
+    if (!prospectedArea) return;
+
+    // Consent now triggers automatically after analysis, no check needed here
 
     setIsSavingPlan(true);
 
@@ -820,7 +813,7 @@ const handlePlacementPlanGenerated = useCallback((plan: { zones: Array<{ x1: num
     const areaData = calculateAreaWithUnits(prospectedArea);
 
     const newPlan = {
-      id: pendingPlanId,
+      id: `plan-${Date.now()}`,
       userId: 'mock-user',
       name: locationName || `Plan ${new Date().toLocaleDateString()}`,
       status: 'complete' as const,
@@ -867,8 +860,8 @@ const handlePlacementPlanGenerated = useCallback((plan: { zones: Array<{ x1: num
     setDraftArea(null);
 
     setIsSavingPlan(false);
-    router.push(`/overview/${pendingPlanId}`);
-  }, [prospectedArea, pendingPlanId, getAnalysisValues, locationName, draftConstraints, equipmentPlacements, addPlan, setDraftArea, router]);
+    router.push(`/overview/${newPlan.id}`);
+  }, [prospectedArea, getAnalysisValues, locationName, draftConstraints, equipmentPlacements, addPlan, setDraftArea, router]);
 
   const handleAuthorizeAgent = useCallback((scopes: string[]) => {
     setIsConsentModalOpen(false);
@@ -1165,12 +1158,12 @@ const handlePlacementPlanGenerated = useCallback((plan: { zones: Array<{ x1: num
         locationName={locationName}
       />
 
+      {/* 3D Terrain Analysis View */}
       <TerrainAnalysisScene
         phase={currentPhase}
         progress={analysisProgress}
         isVisible={show3DView}
         polygon={prospectedArea}
-        onPlacementPlanGenerated={handlePlacementPlanGenerated}
       />
 
 

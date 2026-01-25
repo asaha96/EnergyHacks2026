@@ -58,8 +58,7 @@ export async function POST(request: NextRequest) {
         
         const res = await fetch(url);
         if (!res.ok) {
-          const data = await res.json();
-          console.error('Open-Meteo error:', data);
+          console.error('Open-Meteo error:', res.status);
           return { chunk, elevations: chunk.map(() => 0) };
         }
         
