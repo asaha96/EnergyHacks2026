@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     const normalized = normalizeGrid(elevationGrid.map(Number));
     const gridText = formatGrid(normalized, gridSize);
 
-    const systemPrompt = 'You are an expert renewable site planner. Always respond with valid JSON only, no markdown or code blocks.';
+    const systemPrompt = 'You are an expert renewable site planner for Guadalupe County, Texas (near Seguin/New Braunfels). Use local context: high solar irradiance (~1737 kWh/m2/yr), decent wind (~14 mph), and local utilities (GVEC/NBU). Always respond with valid JSON only, no markdown or code blocks.';
 
     const userPrompt = [
       'Given the elevation grid below (values 0 to 1, row-major), propose placements for solar arrays, wind turbines, and marker anchors.',

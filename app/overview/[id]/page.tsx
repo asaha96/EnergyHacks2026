@@ -3,14 +3,13 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import L from 'leaflet';
-import { 
-  ArrowLeft, 
-  Leaf, 
-  MoreHorizontal, 
-  Download, 
-  Share2, 
-  Copy, 
+import {
+  ArrowLeft,
+  Leaf,
+  MoreHorizontal,
+  Download,
+  Share2,
+  Copy,
   Trash2,
   Pencil,
   Check,
@@ -34,24 +33,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { DynamicMap, type TileLayerType, type EquipmentPlacement } from '@/components/map';
-import { OptimalOverlay } from '@/components/map/overlays';
 import { PlanDetailPanel } from '@/components/overview';
 import { usePlanStore } from '@/stores/plan-store';
 import type { Plan } from '@/types/plan';
 
-const CompletedPolygon = dynamic(
-  () => import('@/components/map/map-internals').then((mod) => mod.CompletedPolygon),
+const TerrainAnalysisScene = dynamic(
+  () => import('@/components/3d/terrain-analysis-scene').then((mod) => mod.TerrainAnalysisScene),
   { ssr: false }
 );
 
-const EquipmentMarkerGroup = dynamic(
-  () => import('@/components/map/markers/equipment-marker').then((mod) => mod.EquipmentMarkerGroup),
-  { ssr: false }
-);
-
-const MapControls = dynamic(
-  () => import('@/components/map/map-internals').then((mod) => mod.MapControls),
+const AnalysisOverlay = dynamic(
+  () => import('@/components/3d/analysis-overlay').then((mod) => mod.AnalysisOverlay),
   { ssr: false }
 );
 
@@ -59,15 +51,12 @@ export default function OverviewPage() {
   const router = useRouter();
   const params = useParams();
   const planId = params.id as string;
-  
+
   const { plans, updatePlan, deletePlan } = usePlanStore();
   const [plan, setPlan] = useState<Plan | null>(null);
-  const [isMapReady, setIsMapReady] = useState(false);
-  const [tileLayer, setTileLayer] = useState<TileLayerType>('satellite');
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const mapRef = useRef<L.Map | null>(null);
 
   useEffect(() => {
     if (planId) {
@@ -82,19 +71,6 @@ export default function OverviewPage() {
       router.push('/home');
     }
   }, [planId, plans, router]);
-
-  const handleMapReady = useCallback((map: L.Map) => {
-    mapRef.current = map;
-    setIsMapReady(true);
-    
-    if (plan?.area?.center) {
-      map.setView([plan.area.center.lat, plan.area.center.lng], 17);
-    }
-  }, [plan?.area?.center]);
-
-  const handleTileLayerChange = useCallback((layer: TileLayerType) => {
-    setTileLayer(layer);
-  }, []);
 
   const handleStartEditName = useCallback(() => {
     setIsEditingName(true);
@@ -135,19 +111,6 @@ export default function OverviewPage() {
     }
   }, [plan]);
 
-  const equipmentPlacements: EquipmentPlacement[] = plan?.analysis?.equipmentPlacements?.map(ep => ({
-    id: ep.equipmentId,
-    type: ep.equipmentId.includes('solar') ? 'solar-array' :
-          ep.equipmentId.includes('wind') ? 'wind-turbine' :
-          ep.equipmentId.includes('battery') ? 'battery' :
-          ep.equipmentId.includes('inverter') ? 'inverter' : 'meter',
-    position: ep.position,
-    label: ep.equipmentId.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-    details: {
-      orientation: ep.orientation,
-    },
-  })) || [];
-
   if (!plan) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-background">
@@ -160,55 +123,27 @@ export default function OverviewPage() {
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-background flex flex-col lg:flex-row">
-      <div className="relative h-[40vh] lg:h-full lg:w-[60%] flex-shrink-0">
-        <DynamicMap
-          tileLayer={tileLayer}
-          onMapReady={handleMapReady}
-          className="h-full w-full"
-          center={plan.area.center ? [plan.area.center.lat, plan.area.center.lng] : undefined}
-          zoom={17}
-        >
-          {isMapReady && (
-            <>
-              <MapControls
-                currentTileLayer={tileLayer}
-                onTileLayerChange={handleTileLayerChange}
-              />
-              
-              <CompletedPolygon coordinates={polygonCoords} />
-              
-              <OptimalOverlay
-                polygon={polygonCoords}
-                visible={true}
-              />
-              
-              {equipmentPlacements.length > 0 && (
-                <EquipmentMarkerGroup
-                  placements={equipmentPlacements}
-                  staggerDelay={0}
-                />
-              )}
-            </>
-          )}
-        </DynamicMap>
+      <div className="relative h-[40vh] lg:h-full lg:w-[60%] flex-shrink-0 bg-slate-50">
+        <TerrainAnalysisScene
+          phase="complete"
+          progress={1}
+          isVisible={true}
+          polygon={polygonCoords}
+          className="right-0"
+        />
 
-        <div className="absolute top-4 left-4 z-[1000]">
-          <Button
-            variant="secondary"
-            size="icon"
-            onClick={() => router.push('/home')}
-            className="h-10 w-10 rounded-full bg-background/95 backdrop-blur-sm shadow-lg border border-border/50 hover:bg-background"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        </div>
+        <AnalysisOverlay
+          phase="complete"
+          progress={1}
+          isAnalyzing={false}
+          locationName={plan.area.address ? plan.area.address.split(',')[0] : 'Remote Location'}
+          className="right-0"
+          onBack={() => router.push('/home')}
+        />
 
-        <div className="absolute top-4 left-16 z-[1000]">
-          <div className="flex items-center gap-2 bg-background/95 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg border border-border/50">
-            <Leaf className="h-5 w-5 text-primary" />
-            <span className="font-semibold text-foreground">TerraWatt</span>
-          </div>
-        </div>
+        {/* Override back button positioning if needed, assuming AnalysisOverlay handles it well now with right-0 */}
+
+
       </div>
 
       <div className="flex-1 lg:w-[40%] flex flex-col border-l border-border overflow-hidden">
@@ -252,7 +187,7 @@ export default function OverviewPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={() => {}}>
+                <DropdownMenuItem onClick={() => { }}>
                   <Download className="h-4 w-4 mr-2" />
                   Export as PDF
                 </DropdownMenuItem>
@@ -260,12 +195,12 @@ export default function OverviewPage() {
                   <Copy className="h-4 w-4 mr-2" />
                   Copy Link
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {}}>
+                <DropdownMenuItem onClick={() => { }}>
                   <Share2 className="h-4 w-4 mr-2" />
                   Share
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   onClick={() => setShowDeleteDialog(true)}
                   className="text-destructive focus:text-destructive"
                 >
@@ -291,7 +226,7 @@ export default function OverviewPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this plan?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete &quot;{plan.name}&quot; and all associated data. 
+              This will permanently delete &quot;{plan.name}&quot; and all associated data.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
