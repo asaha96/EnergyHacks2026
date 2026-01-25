@@ -1,36 +1,28 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Project Name: TeraWatt
 
-## Getting Started
+**Team:** Sujal, Aritra, Senria, Nik  
+**Track Chosen:** Renewables
 
-First, run the development server:
+## The Information Gap in Renewable Deployment
+Even though solar panels are now far more affordable, farmers and other agricultural landowners still face a major barrier: figuring out whether solar makes sense on their own acreage. Right now, answering the basic question “What’s the energy potential of my fields?” means wrestling with terrain and shading maps, weather and production models, interconnection constraints, and local zoning rules.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+As a result, many farmers have to hire consultants and wait weeks just to get a reliable estimate. Our project removes that friction by turning what used to be slow, expensive expert analysis into a fully digital, instant experience so farmers can evaluate solar potential on their land in minutes, not months.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Ideation and Development Process
+Our development process focused on bridging the gap between raw geospatial data and actionable user insights through a Multi-Agent System:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+*   **Data Layering (The Digital Twin):** We integrated granular data sources to create a "Digital Twin" of the user's location.
+    *   *Topology:* We utilized Mapbox and Three.js to fetch high-resolution elevation data and render accurate 3D terrain.
+    *   *Meteorology:* We integrated environmental constraints to model wind and solar potential based on specific geographic coordinates.
+*   **The Simulator Engine:** We built a custom 3D interactive simulator using React Three Fiber. Unlike static 2D calculators, this immersive environment allows for the spatial organization of hybrid assets, placing solar arrays and wind turbines directly onto the actual terrain geometry.
+*   **Agentic Optimization:** We developed an Energy Architect agent powered by Gemini. Instead of manual placement, the agent uses intelligent prompting to autonomously generate layouts that satisfy user goals (e.g., Maximize kWh output under $50k budget).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Final Solution and Intended Impact
+TeraWatt is an intelligent, location-aware energy simulator that democratizes renewable system design.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Key Features
+*   **Site-Specific 3D Simulation:** Instant generation of a topologically accurate 3D environment populated with real-world terrain constraints.
+*   **Agentic Builder:** An AI agent that autonomously designs valid system configurations (Solar/Wind) tailored to user constraints (Budget, Power Needs, Green Energy Maximization).
+*   **Scenario Modeling:** The system calculates and compares scenarios, such as "Maximum Theoretical Output" vs. "Cost-Optimized Build," providing detailed CAPEX vs. Yield breakdowns.
+*   **Comprehensive Plan Analysis:** Delivers granular breakdowns of Production (monthly/daily), Financials (ROI, Payback, Tax Credits), and Environmental Impact (CO2 offsets, equivalencies), ensuring total transparency for investment decisions.
+*   **Verified Metric Certification:** Automatically cross-references simulation data with utility-scale standards to provide certified, bankable reports.
