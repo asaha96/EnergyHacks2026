@@ -161,12 +161,12 @@ export function EnvironmentalTab({ plan, className }: EnvironmentalTabProps) {
   const metrics = useMemo(() => {
     // HARDCODED DEMO DATA
     return {
-      annualCO2: 3578,
-      lifetimeCO2: 89438,
-      treesEquivalent: 59029,
-      carsOffRoad: 778,
-      homesPowered: 918,
-      gallonsGas: 404259,
+      annualCO2: 247.5,
+      lifetimeCO2: 6187.4,
+      treesEquivalent: 4083.7,
+      carsOffRoad: 53.8,
+      homesPowered: 63.5,
+      gallonsGas: 27967,
     };
   }, []);
 
