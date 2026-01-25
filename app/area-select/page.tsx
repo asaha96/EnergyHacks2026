@@ -693,10 +693,18 @@ export default function AreaSelectPage() {
     setAnalysisProgress(1.0);
 
     setCurrentPhase('complete');
-    await delay(300);
-
-    // AUTO-CONSENT: Analysis done, now ask for verification permission
-    setIsConsentModalOpen(true);
+    // Add verification prompt with clickable button
+    const verifyMsgId = `msg-verify-${Date.now()}`;
+    setAgentMessages(prev => [...prev, {
+      id: verifyMsgId,
+      type: 'action',
+      text: 'Ready to verify your plan?',
+      timestamp: new Date(),
+      status: 'completed',
+      detail: 'Link your utility account for optimized savings estimates.',
+      onAction: () => setIsConsentModalOpen(true),
+      actionLabel: 'Verify with Utility Data'
+    }]);
 
     setIsAnalyzing(false);
   }, [addAgentMessage, updateAgentMessage, budget, primaryGoal, technologies, showOverlay, hideOverlay, clearAllOverlays, clearEquipment, prospectedArea, generateEquipmentPlacements, generateZoneLabels]);
@@ -857,6 +865,8 @@ export default function AreaSelectPage() {
 
   const handleAuthorizeAgent = useCallback((scopes: string[]) => {
     setIsConsentModalOpen(false);
+    // Remove the action message (verify button)
+    setAgentMessages(prev => prev.filter(m => m.type !== 'action'));
 
     // Use the NATIVE Agent Chat UI for feedback
     setIsAgentSidebarOpen(true);
@@ -940,6 +950,8 @@ export default function AreaSelectPage() {
 
   const handleDenyAgent = useCallback(() => {
     setIsConsentModalOpen(false);
+    // Remove the action message (verify button)
+    setAgentMessages(prev => prev.filter(m => m.type !== 'action'));
     addAgentMessage('error', 'Verification skipped', { detail: 'Showing estimated plan' });
     // Show unverified summary instead of auto-saving
     addSummaryMessage();
@@ -1345,6 +1357,8 @@ export default function AreaSelectPage() {
         onStop={handleStopAnalysis}
         onSavePlan={() => handleSavePlan()}
         onStartOver={handleStartOver}
+        onVerify={() => setIsConsentModalOpen(true)}
+        hasConsent={hasAgentConsent}
         isSaving={isSavingPlan}
         onMapWidthChange={handleMapWidthChange}
         messages={agentMessages}
