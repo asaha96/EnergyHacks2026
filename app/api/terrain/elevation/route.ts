@@ -1,7 +1,26 @@
 import { NextRequest } from 'next/server';
+import {
+  hardcodedElevation,
+  TERRAIN_GRID_WIDTH,
+  TERRAIN_GRID_HEIGHT,
+  terrainBounds,
+} from '@/lib/terrain-data';
 
 const GRID_SIZE = 20;
 const POINTS_PER_REQUEST = 100;
+
+function returnHardcodedElevation() {
+  return new Response(
+    JSON.stringify({
+      elevation: hardcodedElevation,
+      gridWidth: TERRAIN_GRID_WIDTH,
+      gridHeight: TERRAIN_GRID_HEIGHT,
+      bounds: terrainBounds,
+      source: 'hardcoded',
+    }),
+    { headers: { 'Content-Type': 'application/json' } }
+  );
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,6 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     const elevations = new Array<number>(totalPoints).fill(0);
+    let anyFetchFailed = false;
 
     const results = await Promise.all(
       chunks.map(async (chunk) => {
@@ -56,21 +76,39 @@ export async function POST(request: NextRequest) {
         const lngs = chunk.map(p => p.lng.toFixed(6)).join(',');
         const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lngs}`;
         
-        const res = await fetch(url);
-        if (!res.ok) {
-          console.error('Open-Meteo error:', res.status);
-          return { chunk, elevations: chunk.map(() => 0) };
+        try {
+          const res = await fetch(url);
+          if (!res.ok) {
+            console.error('Open-Meteo error:', res.status);
+            anyFetchFailed = true;
+            return { chunk, elevations: null };
+          }
+          
+          const data = await res.json();
+          if (!Array.isArray(data.elevation)) {
+            anyFetchFailed = true;
+            return { chunk, elevations: null };
+          }
+          return { chunk, elevations: data.elevation as number[] };
+        } catch (err) {
+          console.error('Open-Meteo fetch error:', err);
+          anyFetchFailed = true;
+          return { chunk, elevations: null };
         }
-        
-        const data = await res.json();
-        return { chunk, elevations: data.elevation as number[] };
       })
     );
 
+    if (anyFetchFailed) {
+      console.log('Falling back to hardcoded elevation data');
+      return returnHardcodedElevation();
+    }
+
     for (const { chunk, elevations: chunkElevations } of results) {
-      chunk.forEach((point, i) => {
-        elevations[point.idx] = chunkElevations[i] ?? 0;
-      });
+      if (chunkElevations) {
+        chunk.forEach((point, i) => {
+          elevations[point.idx] = chunkElevations[i] ?? 0;
+        });
+      }
     }
 
     return new Response(
@@ -79,14 +117,12 @@ export async function POST(request: NextRequest) {
         gridWidth,
         gridHeight,
         bounds: { north, south, east, west },
+        source: 'open-meteo',
       }),
       { headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Elevation API error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Failed to fetch elevation data' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    return returnHardcodedElevation();
   }
 }

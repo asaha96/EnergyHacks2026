@@ -146,10 +146,6 @@ export function calculateBounds(coordinates: Coordinate[]): {
   return { north, south, east, west };
 }
 
-/**
- * Fetch elevation data grid via our API route (proxies to Open-Meteo)
- * Covers polygon bounds with adaptive resolution (max 1000 points)
- */
 export async function fetchElevationGrid(
   coordinates: Coordinate[]
 ): Promise<{
