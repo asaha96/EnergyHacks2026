@@ -1746,13 +1746,7 @@ export function TerrainAnalysisScene({
               getSurfaceHeight={getSurfaceHeight}
               polygonBounds={polygonBounds}
             />
-            <AnalysisMarkers
-              phase={phase}
-              progress={progress}
-              placements={placementPlan.markers}
-              getSurfaceHeight={getSurfaceHeight}
-              polygonBounds={polygonBounds}
-            />
+            {/* AnalysisMarkers removed per user request */}
             <GridFloor revealProgress={revealProgress} />
 
             {/* Ambient sparkles */}
