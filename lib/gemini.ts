@@ -4,17 +4,15 @@ import { AzureOpenAI } from 'openai';
 export function getGeminiClient() {
     const apiKey = process.env.GEMINI_API_KEY;
     const endpoint = process.env.GEMINI_ENDPOINT;
-    const deployment = process.env.GEMINI_DEPLOYMENT;
     const apiVersion = process.env.GEMINI_API_VERSION;
 
-    if (!apiKey || !endpoint || !deployment || !apiVersion) {
+    if (!apiKey || !endpoint || !apiVersion) {
         throw new Error('Missing Gemini (Azure OpenAI) configuration');
     }
 
     return new AzureOpenAI({
         apiKey,
         endpoint,
-        deployment,
         apiVersion,
     });
 }
@@ -27,7 +25,7 @@ export async function geminiChat(
     }
 ): Promise<string> {
     const client = getGeminiClient();
-    const modelName = process.env.GEMINI_MODEL || 'gpt-5-mini';
+    const modelName = process.env.GEMINI_MODEL!;
 
     const response = await client.chat.completions.create({
         messages,
@@ -62,4 +60,31 @@ export async function geminiChatJson<T = unknown>(
     }
 
     return JSON.parse(content.slice(start, end + 1)) as T;
+}
+
+// Streaming chat with Gemini - yields text chunks as they arrive
+export async function* geminiChatStream(
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    options?: {
+        maxTokens?: number;
+        disableReasoning?: boolean;
+    }
+): AsyncGenerator<string, void, unknown> {
+    const client = getGeminiClient();
+    const modelName = process.env.GEMINI_MODEL!;
+
+    const stream = await client.chat.completions.create({
+        messages,
+        model: modelName,
+        max_completion_tokens: options?.maxTokens ?? 16384,
+        stream: true,
+        temperature: options?.disableReasoning ? 0 : 0.7,
+    });
+
+    for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content;
+        if (content) {
+            yield content;
+        }
+    }
 }
